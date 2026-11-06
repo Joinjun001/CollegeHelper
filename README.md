@@ -117,7 +117,7 @@ npm run audit
 
 ```bash
 docker compose up -d --build college-helper
-curl http://127.0.0.1:3000/healthz
+curl http://127.0.0.1:3100/healthz
 ```
 
 일회성 API 감사는 별도 프로필로 실행합니다.
