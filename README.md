@@ -2,7 +2,7 @@
 
 한양대학교 HY-ON(Canvas LMS)에서 개인 액세스 토큰으로 조회 가능한 읽기 API를 안전하게 조사하고, 이후 검증된 데이터만 MCP 도구로 제공하는 개인용 대학 생활 도우미 프로젝트입니다.
 
-현재 구현 범위는 **Phase 0(프로젝트 초기화)** 과 **Phase 1(API 감사 도구)** 입니다. MCP 도구와 Canvas 쓰기 요청은 아직 포함하지 않습니다.
+현재 구현 범위는 **Phase 0~3(API 감사, Canvas 서비스 계층, 읽기 전용 MCP 서버)** 입니다. 감사에서 정상 작동이 확인된 API만 도구로 제공합니다.
 
 ## 목표 사용 방식
 
@@ -77,6 +77,25 @@ npm run check
 npm run build
 ```
 
+MCP 서버를 개발 모드로 실행하면 기본적으로 로컬 인터페이스의 `http://127.0.0.1:3000/mcp`에서 대기합니다.
+
+```bash
+npm run dev
+```
+
+상태 확인 주소는 `http://127.0.0.1:3000/healthz`입니다.
+
+## 제공하는 MCP 도구
+
+- `list_courses`: 현재 수강 과목 조회
+- `get_today_tasks`: 특정 날짜의 과제와 제출 여부 조회
+- `get_upcoming_tasks`: 최대 31일 범위의 예정 과제 조회
+- `get_announcements`: 최근 과목 공지 조회
+- `get_course_modules`: 과목별 학습 모듈 조회
+- `get_assignment_context`: 과제 설명, 마감일, 제출 상태 조회
+
+모든 도구는 읽기 전용입니다. 성적, 점수, 이메일, 로그인 ID와 액세스 토큰은 결과에 포함하지 않습니다. Canvas가 반환한 설명과 공지는 HTML을 제거하고 `untrustedContent: true`로 표시합니다.
+
 ## 읽기 전용 API 감사
 
 실제 API 호출은 사용자가 로컬 `.env`를 준비한 뒤 직접 실행합니다.
@@ -94,10 +113,17 @@ npm run audit
 
 ## Docker
 
-로컬 `.env`를 만든 뒤 다음 명령으로 일회성 감사를 실행할 수 있습니다.
+로컬 `.env`를 만든 뒤 MCP 서버를 실행합니다. 호스트에는 루프백 포트만 공개됩니다.
 
 ```bash
-docker compose run --rm canvas-audit
+docker compose up -d --build college-helper
+curl http://127.0.0.1:3000/healthz
+```
+
+일회성 API 감사는 별도 프로필로 실행합니다.
+
+```bash
+docker compose --profile audit run --rm canvas-audit
 ```
 
 ## TypeScript 설정의 역할
@@ -106,6 +132,6 @@ docker compose run --rm canvas-audit
 
 ## 다음 단계
 
-감사 보고서에서 `supported`로 확인된 데이터만 Phase 2의 Canvas 서비스 계층과 Phase 3의 MCP 도구로 구현합니다. 이후 Streamable HTTP MCP 서버를 홈서버에 배포하고, 실제 HTTPS 엔드포인트가 확정되면 `plugin.json`과 `mcp.json`을 포함한 비공개 CollegeHelper 플러그인 패키지를 생성합니다.
+다음 단계는 홈서버의 로컬 MCP 주소 앞에 인증 가능한 HTTPS 터널을 구성하고, 실제 외부 엔드포인트가 확정되면 `plugin.json`과 `mcp.json`을 포함한 비공개 CollegeHelper 플러그인 패키지를 생성하는 것입니다. API 감사에서 파일은 `401`, 페이지는 `404`였으므로 해당 기능은 권한이나 학교별 API 동작이 확인될 때까지 제공하지 않습니다.
 
 작동하지 않는 임시 MCP 주소를 저장소에 넣지 않습니다. 자세한 기준은 [개발 제안서](./CollegeHelper_개발_제안서.md)를 따릅니다.

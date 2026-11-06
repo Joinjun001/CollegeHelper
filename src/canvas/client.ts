@@ -38,6 +38,27 @@ export class CanvasClient {
     return (await this.requestJson<T>(url)).data;
   }
 
+  webUrl(path: string): string {
+    if (!path.startsWith("/")) {
+      throw new CanvasError("INVALID_RESPONSE", "Canvas 웹 경로는 /로 시작해야 합니다.");
+    }
+    const url = new URL(path, this.baseUrl);
+    if (url.origin !== this.baseUrl.origin) {
+      throw new CanvasError("INVALID_RESPONSE", "Canvas 호스트 밖의 웹 주소를 만들 수 없습니다.");
+    }
+    return url.toString();
+  }
+
+  trustedWebUrl(value: string | undefined): string | null {
+    if (!value) return null;
+    try {
+      const url = new URL(value, this.baseUrl);
+      return url.origin === this.baseUrl.origin && url.protocol === "https:" ? url.toString() : null;
+    } catch {
+      return null;
+    }
+  }
+
   async getAllPages<T>(path: string, query: Query = {}, maxPages = 10): Promise<CanvasPage<T>> {
     const initialQuery = { ...query, per_page: 100 };
     let nextUrl: URL | undefined = this.buildApiUrl(path, initialQuery);

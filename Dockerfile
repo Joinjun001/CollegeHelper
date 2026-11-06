@@ -15,4 +15,5 @@ COPY --from=build --chown=app:app /app/package.json /app/package-lock.json ./
 COPY --from=build --chown=app:app /app/node_modules ./node_modules
 COPY --from=build --chown=app:app /app/dist ./dist
 USER app
-CMD ["node", "dist/scripts/audit-canvas-api.js"]
+EXPOSE 3000
+CMD ["node", "dist/src/index.js"]

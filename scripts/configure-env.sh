@@ -46,6 +46,8 @@ printf '%s\n' \
   'AUDIT_MAX_PAGES=10' \
   'AUDIT_MAX_COURSES=3' \
   'REPORTS_DIR=reports' \
+  'MCP_HOST=127.0.0.1' \
+  'MCP_PORT=3000' \
   'TZ=Asia/Seoul' > "${temporary_file}"
 
 chmod 600 "${temporary_file}"

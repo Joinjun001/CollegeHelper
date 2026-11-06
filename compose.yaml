@@ -1,13 +1,32 @@
 name: college-helper
 
 services:
+  college-helper:
+    build: .
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 3000
+    ports:
+      - "127.0.0.1:3000:3000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
   canvas-audit:
     build: .
+    profiles: ["audit"]
     env_file:
       - path: .env
         required: false
     environment:
       REPORTS_DIR: /app/reports
+    command: ["node", "dist/scripts/audit-canvas-api.js"]
     volumes:
       - ./reports:/app/reports
     read_only: true

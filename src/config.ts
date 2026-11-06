@@ -8,6 +8,8 @@ const EnvironmentSchema = z
     AUDIT_MAX_PAGES: z.coerce.number().int().min(1).max(10).default(10),
     AUDIT_MAX_COURSES: z.coerce.number().int().min(1).max(10).default(3),
     REPORTS_DIR: z.string().trim().min(1).default("reports"),
+    MCP_HOST: z.enum(["127.0.0.1", "::1", "0.0.0.0"]).default("127.0.0.1"),
+    MCP_PORT: z.coerce.number().int().min(1).max(65_535).default(3_000),
   })
   .superRefine((value, context) => {
     const url = new URL(value.CANVAS_BASE_URL);
@@ -41,6 +43,8 @@ export interface AppConfig {
   auditMaxPages: number;
   auditMaxCourses: number;
   reportsDir: string;
+  mcpHost: "127.0.0.1" | "::1" | "0.0.0.0";
+  mcpPort: number;
 }
 
 export class ConfigError extends Error {
@@ -68,5 +72,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     auditMaxPages: result.data.AUDIT_MAX_PAGES,
     auditMaxCourses: result.data.AUDIT_MAX_COURSES,
     reportsDir: result.data.REPORTS_DIR,
+    mcpHost: result.data.MCP_HOST,
+    mcpPort: result.data.MCP_PORT,
   };
 }

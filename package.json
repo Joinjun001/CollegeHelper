@@ -13,13 +13,18 @@
     "lint": "eslint .",
     "test": "vitest run --dir test",
     "check": "npm run typecheck && npm run lint && npm test",
-    "audit": "node --env-file-if-exists=.env --import tsx scripts/audit-canvas-api.ts"
+    "audit": "node --env-file-if-exists=.env --import tsx scripts/audit-canvas-api.ts",
+    "dev": "node --env-file-if-exists=.env --import tsx src/index.ts",
+    "start": "node --env-file-if-exists=.env dist/src/index.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "22.15.30",
     "eslint": "10.14.0",
     "tsx": "4.23.15",

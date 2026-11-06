@@ -39,6 +39,12 @@ describe("CanvasClient", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("결과 링크도 Canvas 호스트만 허용한다", () => {
+    const client = new CanvasClient({ baseUrl: "https://canvas.example.edu", accessToken: "secret", timeoutMs: 1_000 });
+    expect(client.trustedWebUrl("https://canvas.example.edu/courses/1")).toBe("https://canvas.example.edu/courses/1");
+    expect(client.trustedWebUrl("https://evil.example/courses/1")).toBeNull();
+  });
+
   it("429 응답의 Retry-After를 지킨 뒤 재시도한다", async () => {
     const fetchImpl = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({}, { status: 429, headers: { "retry-after": "0" } }))
