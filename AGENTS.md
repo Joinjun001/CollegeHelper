@@ -1,7 +1,7 @@
 # Agent instructions
 
 - 한국어로 소통할 때는 항상 존댓말을 사용합니다.
-- 작업 전에 `GPAI_개인용_Canvas_MCP_개발_제안서.md`와 `README.md`를 읽습니다.
+- 작업 전에 `CollegeHelper_개발_제안서.md`와 `README.md`를 읽습니다.
 - Canvas 기능은 공식 문서와 비식별 API 감사 결과를 근거로 구현합니다.
 - 사용자에게 토큰을 채팅에 입력하도록 요청하지 않으며 `.env` 실제 값을 읽거나 출력하지 않습니다.
 - 초기 릴리스의 Canvas 요청은 `GET`만 허용합니다.

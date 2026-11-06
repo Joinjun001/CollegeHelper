@@ -1,4 +1,4 @@
-# GPAI 개인용 Canvas MCP 개발 제안서
+# CollegeHelper 개인용 Canvas MCP 개발 제안서
 
 작성일: 2026년 11월 6일  
 대상: 한양대학교 HY-ON(Canvas LMS)을 사용하는 개인 사용자  
@@ -10,11 +10,11 @@
 
 ### 1.1 프로젝트명
 
-GPAI Personal Canvas MCP
+CollegeHelper
 
 ### 1.2 핵심 컨셉
 
-한양대학교 HY-ON에서 사용자가 직접 발급한 Canvas 개인 액세스 토큰을 이용하여, 사용자가 Canvas에서 열람할 수 있는 학습 정보를 개인 홈서버의 MCP 서버를 통해 ChatGPT에 제공한다.
+한양대학교 HY-ON에서 사용자가 직접 발급한 Canvas 개인 액세스 토큰을 이용하여, 사용자가 Canvas에서 열람할 수 있는 학습 정보를 개인 홈서버의 MCP 서버를 통해 ChatGPT에 제공한다. 사용자는 별도 웹사이트를 이용하지 않고 ChatGPT 입력창에서 `CollegeHelper` 플러그인을 선택한 뒤 자연어 프롬프트를 입력한다.
 
 이 프로젝트의 첫 목표는 다양한 기능을 미리 가정하는 것이 아니다. 실제 HY-ON Canvas API에서 조회 가능한 데이터와 권한을 자동으로 조사하고, 검증된 데이터만 MCP 도구로 제공하는 것이다.
 
@@ -25,6 +25,7 @@ GPAI Personal Canvas MCP
 3. ChatGPT가 자연어 요청에 따라 필요한 학습 데이터를 안전하게 조회하도록 MCP 도구를 제공한다.
 4. 토큰과 개인정보가 ChatGPT 대화, 로그, Git 저장소에 노출되지 않도록 한다.
 5. 홈서버에서 지속적으로 운영할 수 있는 작고 단순한 구조를 만든다.
+6. ChatGPT 웹에서 플러그인을 명시적으로 선택하거나 예약 작업에서 지정하여 같은 도구를 호출할 수 있게 한다.
 
 ### 1.4 제외 범위
 
@@ -66,32 +67,57 @@ AI가 안정적으로 사용할 수 있도록 각 MCP 도구의 입력, 출력, 
 
 ## 3. 사용자 시나리오
 
-초기 버전이 지원해야 할 대표 요청은 다음과 같다.
+### 3.1 ChatGPT 입력창에서 직접 호출
 
-- “현재 수강 중인 과목을 알려 주세요.”
-- “이번 주 마감 과제를 정리해 주세요.”
-- “아직 제출하지 않은 과제가 있나요?”
-- “최근 과목 공지를 요약해 주세요.”
-- “객체지향개발론의 주차별 학습자료를 찾아 주세요.”
-- “오늘부터 7일 동안 예정된 과제와 일정을 보여 주세요.”
+사용자가 ChatGPT 입력창에서 `CollegeHelper` 플러그인을 선택하면 작성 중인 프롬프트에 플러그인 참조가 표시된다. 사용자는 그 상태에서 자연어 요청을 보내며, ChatGPT가 필요한 CollegeHelper MCP 도구를 선택하여 호출한다.
+
+대표 요청:
+
+- “`@CollegeHelper` 현재 수강 중인 과목을 알려 주세요.”
+- “`@CollegeHelper` 이번 주 마감 과제를 정리해 주세요.”
+- “`@CollegeHelper` 아직 제출하지 않은 과제가 있나요?”
+- “`@CollegeHelper` 최근 과목 공지를 요약해 주세요.”
+- “`@CollegeHelper` 객체지향개발론의 주차별 학습자료를 찾아 예습을 도와주세요.”
+- “`@CollegeHelper` 오늘부터 7일 동안 예정된 과제와 일정을 보여 주세요.”
 
 서버가 직접 자연어 요약을 만들 필요는 없다. 서버는 과목명, 마감일, 제출 상태, 원문 URL과 같은 근거 데이터를 구조화해 반환한다.
+
+### 3.2 예약 작업에서 호출
+
+사용자는 예약 작업 프롬프트에 CollegeHelper 플러그인을 지정할 수 있다.
+
+```text
+매일 오전 8시에 @CollegeHelper를 사용해서 오늘 마감 과제와
+미제출 과제를 확인하고, 확인할 내용이 있을 때만 알려줘.
+```
+
+예약 실행 시에도 저장된 과제 목록을 재사용하지 않고 Canvas API에서 최신 데이터를 조회한다. 변경이나 조치할 내용이 없으면 불필요한 알림을 만들지 않는다.
+
+### 3.3 학습자료 기반 도움
+
+사용자가 특정 과목이나 과제를 지정하면 CollegeHelper는 사용자가 열람할 수 있는 과제 설명, 모듈, 페이지와 파일 메타데이터를 조회한다. ChatGPT는 이 근거를 이용하여 개념 설명, 예습, 복습과 문제 풀이를 지원한다.
+
+초기 버전은 과제 제출, 퀴즈 답안 전송, 게시물 작성 등 Canvas 쓰기 작업을 수행하지 않는다.
 
 ---
 
 ## 4. 권장 시스템 아키텍처
 
 ```text
-ChatGPT
+ChatGPT 웹 / 예약 작업
    │
-   │ MCP 요청
+   │ CollegeHelper 플러그인 선택 및 MCP 요청
    ▼
-Secure MCP Tunnel
+CollegeHelper 비공개 플러그인
+   │
+   │ Streamable HTTP
+   ▼
+HTTPS MCP Endpoint / Secure MCP Tunnel
    │
    ▼
 개인 홈서버
 ┌──────────────────────────────────┐
-│ GPAI MCP Server                  │
+│ CollegeHelper MCP Server         │
 │                                  │
 │  MCP Tool Layer                  │
 │          │                       │
@@ -120,6 +146,8 @@ Secure MCP Tunnel
 - Connection: Secure MCP Tunnel
 
 기존 홈서버 운영 환경이 Python 중심이라면 Python MCP SDK로 변경할 수 있다. 언어보다 데이터 계약과 보안 원칙을 우선한다.
+
+`tsconfig.json`, ESLint와 Vitest는 TypeScript 서버를 개발하고 검증하기 위한 내부 설정이다. 사용자 인터페이스 구성요소가 아니며 ChatGPT에서 플러그인을 호출할 때 노출되지 않는다.
 
 ---
 
@@ -445,7 +473,7 @@ Canvas의 과제 설명과 공지 본문은 HTML일 수 있다.
 ## 11. 권장 프로젝트 구조
 
 ```text
-gpai-canvas-mcp/
+college-helper/
 ├── src/
 │   ├── index.ts
 │   ├── config.ts
@@ -658,9 +686,9 @@ gpai-canvas-mcp/
 ### 14.1 AI에게 제공할 최초 작업 지시 예시
 
 ```text
-이 저장소에 GPAI 개인용 Canvas MCP의 Phase 0과 Phase 1을 구현해 주세요.
+이 저장소에 CollegeHelper의 Phase 0과 Phase 1을 구현해 주세요.
 
-반드시 `GPAI_개인용_Canvas_MCP_개발_제안서.md`를 먼저 읽고 따르세요.
+반드시 `CollegeHelper_개발_제안서.md`를 먼저 읽고 따르세요.
 이번 작업 범위는 프로젝트 초기화와 읽기 전용 API 감사 도구까지입니다.
 MCP 도구 구현과 Canvas 쓰기 요청은 아직 추가하지 마세요.
 
