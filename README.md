@@ -135,4 +135,12 @@ docker compose --profile audit run --rm canvas-audit
 
 다음 단계는 홈서버의 로컬 MCP 주소 앞에 인증 가능한 HTTPS 터널을 구성하고, 실제 외부 엔드포인트가 확정되면 `plugin.json`과 `mcp.json`을 포함한 비공개 CollegeHelper 플러그인 패키지를 생성하는 것입니다. API 감사에서 파일은 `401`, 페이지는 `404`였으므로 해당 기능은 권한이나 학교별 API 동작이 확인될 때까지 제공하지 않습니다.
 
+CollegeHelper는 공개 인바운드 주소 대신 OpenAI Secure MCP Tunnel을 사용합니다. Platform에서 `tunnel_id`와 `Tunnels Read + Use` 권한의 Runtime API key를 만든 뒤 홈서버에서 다음 스크립트를 실행합니다.
+
+```bash
+./scripts/configure-openai-tunnel.sh
+```
+
+키는 `/home/injun/apps/tunnel-client/secrets/runtime.key`에 권한 `600`으로 저장되고 명령 인자나 Git 저장소에는 들어가지 않습니다.
+
 작동하지 않는 임시 MCP 주소를 저장소에 넣지 않습니다. 자세한 기준은 [개발 제안서](./CollegeHelper_개발_제안서.md)를 따릅니다.
