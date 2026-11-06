@@ -1,0 +1,157 @@
+import { CanvasError, errorFromStatus } from "./errors.js";
+import { parseLinkHeader, validateNextPageUrl } from "./pagination.js";
+
+export type QueryValue = string | number | boolean | readonly string[] | undefined;
+export type Query = Readonly<Record<string, QueryValue>>;
+
+export interface CanvasClientOptions {
+  baseUrl: string;
+  accessToken: string;
+  timeoutMs: number;
+  fetchImpl?: typeof fetch;
+}
+
+export interface CanvasPage<T> {
+  items: T[];
+  pageCount: number;
+  hadLinkHeader: boolean;
+  truncated: boolean;
+}
+
+interface JsonResponse<T> {
+  data: T;
+  headers: Headers;
+  url: URL;
+}
+
+export class CanvasClient {
+  private readonly baseUrl: URL;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(private readonly options: CanvasClientOptions) {
+    this.baseUrl = new URL(options.baseUrl);
+    this.fetchImpl = options.fetchImpl ?? fetch;
+  }
+
+  async getJson<T>(path: string, query: Query = {}): Promise<T> {
+    const url = this.buildApiUrl(path, query);
+    return (await this.requestJson<T>(url)).data;
+  }
+
+  async getAllPages<T>(path: string, query: Query = {}, maxPages = 10): Promise<CanvasPage<T>> {
+    const initialQuery = { ...query, per_page: 100 };
+    let nextUrl: URL | undefined = this.buildApiUrl(path, initialQuery);
+    const items: T[] = [];
+    let pageCount = 0;
+    let hadLinkHeader = false;
+
+    while (nextUrl && pageCount < maxPages) {
+      const response: JsonResponse<unknown> = await this.requestJson<unknown>(nextUrl);
+      if (!Array.isArray(response.data)) {
+        throw new CanvasError("INVALID_RESPONSE", "Canvas 목록 응답이 배열이 아닙니다.");
+      }
+      items.push(...(response.data as T[]));
+      pageCount += 1;
+
+      const linkHeader = response.headers.get("link");
+      hadLinkHeader ||= linkHeader !== null;
+      const next = parseLinkHeader(linkHeader).get("next");
+      nextUrl = next ? validateNextPageUrl(next, this.baseUrl.toString()) : undefined;
+    }
+
+    return { items, pageCount, hadLinkHeader, truncated: nextUrl !== undefined };
+  }
+
+  private buildApiUrl(path: string, query: Query): URL {
+    if (!path.startsWith("/api/v1/")) {
+      throw new CanvasError("INVALID_RESPONSE", "Canvas API 경로는 /api/v1/로 시작해야 합니다.");
+    }
+    const url = new URL(path, this.baseUrl);
+    if (url.origin !== this.baseUrl.origin) {
+      throw new CanvasError("INVALID_RESPONSE", "Canvas 호스트 밖으로 요청할 수 없습니다.");
+    }
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined) continue;
+      if (typeof value === "object") {
+        for (const item of value) url.searchParams.append(key, item);
+      } else {
+        url.searchParams.set(key, String(value));
+      }
+    }
+    return url;
+  }
+
+  private async requestJson<T>(initialUrl: URL): Promise<JsonResponse<T>> {
+    let url = initialUrl;
+    let redirectCount = 0;
+    let rateLimitRetries = 0;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs);
+      let response: Response;
+      try {
+        response = await this.fetchImpl(url, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${this.options.accessToken}`,
+          },
+          redirect: "manual",
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          throw new CanvasError("UPSTREAM_TIMEOUT", "Canvas API 요청 시간이 초과되었습니다.");
+        }
+        throw new CanvasError("UPSTREAM_ERROR", "Canvas API에 연결할 수 없습니다.");
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (!location || redirectCount >= 3) {
+          throw new CanvasError("INVALID_RESPONSE", "Canvas 리다이렉트를 안전하게 처리할 수 없습니다.", response.status);
+        }
+        const redirectUrl = new URL(location, url);
+        if (redirectUrl.origin !== this.baseUrl.origin || !redirectUrl.pathname.startsWith("/api/v1/")) {
+          throw new CanvasError("INVALID_RESPONSE", "Canvas 인증 요청이 다른 호스트로 리다이렉트되었습니다.", response.status);
+        }
+        url = redirectUrl;
+        redirectCount += 1;
+        continue;
+      }
+
+      if (response.status === 429 && rateLimitRetries < 2) {
+        rateLimitRetries += 1;
+        await wait(retryAfterMilliseconds(response.headers.get("retry-after")));
+        continue;
+      }
+      if (!response.ok) throw errorFromStatus(response.status);
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.toLowerCase().includes("application/json")) {
+        throw new CanvasError("INVALID_RESPONSE", "Canvas가 JSON이 아닌 응답을 반환했습니다.", response.status);
+      }
+      try {
+        const data = (await response.json()) as T;
+        return { data, headers: response.headers, url };
+      } catch {
+        throw new CanvasError("INVALID_RESPONSE", "Canvas JSON 응답을 해석할 수 없습니다.", response.status);
+      }
+    }
+    throw new CanvasError("INVALID_RESPONSE", "Canvas 리다이렉트 제한을 초과했습니다.");
+  }
+}
+
+function retryAfterMilliseconds(value: string | null): number {
+  if (!value) return 1_000;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1_000, 30_000);
+  const date = Date.parse(value);
+  if (Number.isNaN(date)) return 1_000;
+  return Math.min(Math.max(date - Date.now(), 0), 30_000);
+}
+
+async function wait(milliseconds: number): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+}

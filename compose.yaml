@@ -1,0 +1,18 @@
+name: college-helper
+
+services:
+  canvas-audit:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REPORTS_DIR: /app/reports
+    volumes:
+      - ./reports:/app/reports
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
