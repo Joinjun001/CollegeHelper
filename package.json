@@ -14,6 +14,7 @@
     "test": "vitest run --dir test",
     "check": "npm run typecheck && npm run lint && npm test",
     "audit": "node --env-file-if-exists=.env --import tsx scripts/audit-canvas-api.ts",
+    "smoke:mcp": "node --import tsx scripts/smoke-mcp.ts",
     "dev": "node --env-file-if-exists=.env --import tsx src/index.ts",
     "start": "node --env-file-if-exists=.env dist/src/index.js"
   },
