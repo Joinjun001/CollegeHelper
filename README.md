@@ -57,6 +57,14 @@ cp .env.example .env
 
 `.env`에 HY-ON의 Canvas 루트 주소와 개인 액세스 토큰을 직접 저장합니다. 토큰을 채팅, 이슈, 커밋 또는 테스트 fixture에 붙여 넣지 마세요.
 
+홈서버에서는 토큰이 화면이나 셸 기록에 남지 않도록 보안 입력 스크립트를 사용합니다.
+
+```bash
+./scripts/configure-env.sh
+```
+
+스크립트는 토큰을 숨김 입력으로 받고 권한이 `600`인 `.env`를 생성합니다. 기존 `.env`가 있으면 자동으로 덮어쓰지 않습니다.
+
 ```dotenv
 CANVAS_BASE_URL=https://<HY-ON-CANVAS-DOMAIN>
 CANVAS_ACCESS_TOKEN=<LOCAL_SECRET_ONLY>
