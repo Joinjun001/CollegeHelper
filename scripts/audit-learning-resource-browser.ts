@@ -33,6 +33,19 @@ interface ResourceResponseShape {
   objects: JsonObjectShape[];
 }
 
+interface ResourceResponseInspection {
+  shape: ResourceResponseShape;
+  firstViewUrl: string | null;
+}
+
+interface ViewUrlInspection {
+  status: number;
+  contentType: string;
+  contentDispositionPresent: boolean;
+  contentLength: number | null;
+  finalPath: string;
+}
+
 async function main(): Promise<void> {
   const config = loadConfig();
   const client = new CanvasClient({
@@ -68,6 +81,8 @@ async function main(): Promise<void> {
   const baseOrigin = new URL(config.canvasBaseUrl).origin;
   const observations = new Map<string, NetworkObservation>();
   const resourceShapes: ResourceResponseShape[] = [];
+  const resourceViewUrls: string[] = [];
+  const viewUrlInspections: ViewUrlInspection[] = [];
   const shapeInspections: Array<Promise<void>> = [];
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   try {
@@ -86,14 +101,33 @@ async function main(): Promise<void> {
         recordResponse(observations, response, baseOrigin);
         const url = safeSameOriginUrl(response.url(), baseOrigin);
         if (url?.pathname.endsWith("/resources_db") && response.status() === 200) {
-          shapeInspections.push(inspectResourceResponse(response).then((shape) => {
-            if (shape) resourceShapes.push(shape);
+          shapeInspections.push(inspectResourceResponse(response).then((inspection) => {
+            if (!inspection) return;
+            resourceShapes.push(inspection.shape);
+            if (inspection.firstViewUrl) resourceViewUrls.push(inspection.firstViewUrl);
           }));
         }
       });
       await page.goto(launchUrl.toString(), { waitUntil: "domcontentloaded", timeout: 30_000 });
       await page.waitForTimeout(8_000);
       await Promise.all(shapeInspections);
+      const firstViewUrl = resourceViewUrls[0];
+      if (firstViewUrl) {
+        const viewUrl = new URL(firstViewUrl, baseOrigin);
+        if (viewUrl.protocol === "https:" && viewUrl.origin === baseOrigin) {
+          const response = await context.request.get(viewUrl.toString(), { failOnStatusCode: false, maxRedirects: 5 });
+          const finalUrl = new URL(response.url());
+          const contentLengthValue = response.headers()["content-length"];
+          const contentLength = contentLengthValue ? Number(contentLengthValue) : Number.NaN;
+          viewUrlInspections.push({
+            status: response.status(),
+            contentType: (response.headers()["content-type"] ?? "").split(";", 1)[0]?.trim().toLowerCase() ?? "",
+            contentDispositionPresent: typeof response.headers()["content-disposition"] === "string",
+            contentLength: Number.isSafeInteger(contentLength) && contentLength >= 0 ? contentLength : null,
+            finalPath: sanitizeNetworkPath(finalUrl.pathname),
+          });
+        }
+      }
       await context.close();
     }
   } finally {
@@ -118,6 +152,7 @@ async function main(): Promise<void> {
         statuses: [...item.statuses].sort((left, right) => left - right),
       })),
     resourceResponseShapes: resourceShapes,
+    viewUrlInspections,
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
@@ -175,17 +210,30 @@ function asId(value: unknown): string | undefined {
   return undefined;
 }
 
-async function inspectResourceResponse(response: Response): Promise<ResourceResponseShape | null> {
+async function inspectResourceResponse(response: Response): Promise<ResourceResponseInspection | null> {
   try {
     const value = await response.json() as unknown;
     return {
-      topLevelFields: isRecord(value) ? Object.keys(value).sort().slice(0, 100) : [],
-      arrays: collectArrayShapes(value),
-      objects: collectObjectShapes(value),
+      shape: {
+        topLevelFields: isRecord(value) ? Object.keys(value).sort().slice(0, 100) : [],
+        arrays: collectArrayShapes(value),
+        objects: collectObjectShapes(value),
+      },
+      firstViewUrl: findFirstViewUrl(value),
     };
   } catch {
     return null;
   }
+}
+
+function findFirstViewUrl(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  for (const item of value) {
+    if (!isRecord(item) || !isRecord(item["commons_content"])) continue;
+    const viewUrl = item["commons_content"]["view_url"];
+    if (typeof viewUrl === "string" && viewUrl.length > 0) return viewUrl;
+  }
+  return null;
 }
 
 function collectArrayShapes(value: unknown, path = "$", depth = 0): JsonArrayShape[] {
