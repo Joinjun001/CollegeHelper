@@ -38,6 +38,10 @@ export interface LtiFormSubmissionInspection {
   formCount: number;
   hiddenInputCount: number;
   scriptCount: number;
+  externalScriptCount: number;
+  inlineScriptCount: number;
+  jsonScriptCount: number;
+  scriptSourceHosts: string[];
   metaRefreshCount: number;
   nextFormActionHost: string | null;
   nextFormMethod: string | null;
@@ -177,6 +181,10 @@ export class CanvasClient {
     let formCount = 0;
     let hiddenInputCount = 0;
     let scriptCount = 0;
+    let externalScriptCount = 0;
+    let inlineScriptCount = 0;
+    let jsonScriptCount = 0;
+    const scriptSourceHosts = new Set<string>();
     let metaRefreshCount = 0;
     let nextFormActionHost: string | null = null;
     let nextFormMethod: string | null = null;
@@ -199,7 +207,21 @@ export class CanvasClient {
       const responseForms = [...responseHtml.matchAll(/<form\b[^>]*>/gi)];
       formCount = responseForms.length;
       hiddenInputCount = [...responseHtml.matchAll(/<input\b[^>]*\btype\s*=\s*["']hidden["'][^>]*>/gi)].length;
-      scriptCount = [...responseHtml.matchAll(/<script\b[^>]*>/gi)].length;
+      const scripts = [...responseHtml.matchAll(/<script\b[^>]*>/gi)];
+      scriptCount = scripts.length;
+      for (const script of scripts) {
+        const tag = script[0];
+        const source = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
+        if (source) {
+          externalScriptCount += 1;
+          const host = safeHttpsHostname(decodeHtmlAttribute(source), actionUrl);
+          if (host) scriptSourceHosts.add(host);
+        } else {
+          inlineScriptCount += 1;
+        }
+        const type = /\btype\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1]?.toLowerCase();
+        if (type === "application/json" || type === "application/ld+json") jsonScriptCount += 1;
+      }
       metaRefreshCount = [...responseHtml.matchAll(/<meta\b[^>]*http-equiv\s*=\s*["']refresh["'][^>]*>/gi)].length;
       const nextFormTag = responseForms[0]?.[0];
       if (nextFormTag) {
@@ -222,6 +244,10 @@ export class CanvasClient {
       formCount,
       hiddenInputCount,
       scriptCount,
+      externalScriptCount,
+      inlineScriptCount,
+      jsonScriptCount,
+      scriptSourceHosts: [...scriptSourceHosts].sort(),
       metaRefreshCount,
       nextFormActionHost,
       nextFormMethod,

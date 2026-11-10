@@ -420,6 +420,10 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         let formCount = 0;
         let hiddenInputCount = 0;
         let scriptCount = 0;
+        let externalScriptCount = 0;
+        let inlineScriptCount = 0;
+        let jsonScriptCount = 0;
+        const scriptSourceHostCounts = new Map<string, number>();
         let metaRefreshCount = 0;
         const nextFormMethodCounts = new Map<string, number>();
         const nextFormActionHostCounts = new Map<string, number>();
@@ -445,6 +449,10 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
             formCount += inspection.formCount;
             hiddenInputCount += inspection.hiddenInputCount;
             scriptCount += inspection.scriptCount;
+            externalScriptCount += inspection.externalScriptCount;
+            inlineScriptCount += inspection.inlineScriptCount;
+            jsonScriptCount += inspection.jsonScriptCount;
+            for (const host of inspection.scriptSourceHosts) incrementCount(scriptSourceHostCounts, host);
             metaRefreshCount += inspection.metaRefreshCount;
             if (inspection.nextFormMethod) incrementCount(nextFormMethodCounts, inspection.nextFormMethod);
             if (inspection.nextFormActionHost) incrementCount(nextFormActionHostCounts, inspection.nextFormActionHost);
@@ -463,6 +471,10 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         notes.push(`추가 form 수: ${formCount}`);
         notes.push(`추가 hidden input 수: ${hiddenInputCount}`);
         notes.push(`script 수: ${scriptCount}`);
+        notes.push(`외부 script 수: ${externalScriptCount}`);
+        notes.push(`inline script 수: ${inlineScriptCount}`);
+        notes.push(`JSON script 수: ${jsonScriptCount}`);
+        if (scriptSourceHostCounts.size > 0) notes.push(`script 호스트 수: ${renderCounts(scriptSourceHostCounts)}`);
         notes.push(`meta refresh 수: ${metaRefreshCount}`);
         if (nextFormMethodCounts.size > 0) notes.push(`추가 폼 방식 수: ${renderCounts(nextFormMethodCounts)}`);
         if (nextFormActionHostCounts.size > 0) notes.push(`추가 폼 대상 호스트 수: ${renderCounts(nextFormActionHostCounts)}`);
