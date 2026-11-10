@@ -37,6 +37,7 @@ interface ResourceResponseShape {
 interface ResourceResponseInspection {
   shape: ResourceResponseShape;
   firstViewUrl: string | null;
+  firstTitle: string | null;
 }
 
 interface ViewUrlInspection {
@@ -111,6 +112,14 @@ async function main(): Promise<void> {
         if (resourceInspection.firstViewUrl) resourceViewUrls.push(resourceInspection.firstViewUrl);
       }
       await page.waitForTimeout(2_000);
+      if (resourceInspection?.firstTitle) {
+        await page.route("**/*", async (route) => {
+          if (route.request().method() === "GET") await route.continue();
+          else await route.abort("blockedbyclient");
+        });
+        await page.getByText(resourceInspection.firstTitle, { exact: true }).first().click({ noWaitAfter: true, timeout: 5_000 }).catch(() => undefined);
+        await page.waitForTimeout(3_000);
+      }
       const domUrls = await page.locator("[href], [src], [data-url], [data-href], [data-file-url]").evaluateAll((elements) =>
         elements.flatMap((element) => ["href", "src", "data-url", "data-href", "data-file-url"]
           .map((attribute) => element.getAttribute(attribute))
@@ -235,6 +244,7 @@ async function inspectResourceResponse(response: Response): Promise<ResourceResp
         objects: collectObjectShapes(value),
       },
       firstViewUrl: findFirstViewUrl(value),
+      firstTitle: findFirstStringField(value, "title"),
     };
   } catch {
     return null;
@@ -247,6 +257,16 @@ function findFirstViewUrl(value: unknown): string | null {
     if (!isRecord(item) || !isRecord(item["commons_content"])) continue;
     const viewUrl = item["commons_content"]["view_url"];
     if (typeof viewUrl === "string" && viewUrl.length > 0) return viewUrl;
+  }
+  return null;
+}
+
+function findFirstStringField(value: unknown, field: string): string | null {
+  if (!Array.isArray(value)) return null;
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const candidate = item[field];
+    if (typeof candidate === "string" && candidate.length > 0) return candidate;
   }
   return null;
 }
