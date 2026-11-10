@@ -7,6 +7,8 @@ type JsonObject = Record<string, unknown>;
 interface AuditContext {
   courseIds: string[];
   assignmentIds: Map<string, string>;
+  moduleIds: Map<string, string[]>;
+  moduleFileIds: string[];
 }
 
 interface Observation {
@@ -24,6 +26,8 @@ interface EndpointDefinition {
 }
 
 const SENSITIVE_FIELD = /(^|_)(email|sis_user_id|login_id|score|grade|body|description|submission|download_url|uuid|token|cookie)($|_)/i;
+const MAX_AUDIT_MODULES_PER_COURSE = 20;
+const MAX_AUDIT_MODULE_FILES = 10;
 
 export interface AuditRunnerOptions {
   maxPages: number;
@@ -31,7 +35,12 @@ export interface AuditRunnerOptions {
 }
 
 export async function runCanvasAudit(client: CanvasClient, options: AuditRunnerOptions): Promise<AuditResult[]> {
-  const context: AuditContext = { courseIds: [], assignmentIds: new Map() };
+  const context: AuditContext = {
+    courseIds: [],
+    assignmentIds: new Map(),
+    moduleIds: new Map(),
+    moduleFileIds: [],
+  };
   const definitions = createDefinitions(client, options);
   const results: AuditResult[] = [];
 
@@ -158,7 +167,72 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         return { values: page.items, pagination: page.hadLinkHeader || page.pageCount > 1, called: true, ...(page.truncated ? { notes: ["페이지 상한에 도달해 결과가 일부일 수 있습니다."] } : {}) };
       },
     },
-    { id: "A08", name: "모듈", path: "/api/v1/courses/:course_id/modules", execute: (context) => acrossCourses(context, "modules") },
+    {
+      id: "A08",
+      name: "모듈",
+      path: "/api/v1/courses/:course_id/modules",
+      execute: (context) => acrossCourses(context, "modules", (courseId, items) => {
+        context.moduleIds.set(
+          courseId,
+          items.map((item) => asId(item.id)).filter((id): id is string => id !== undefined),
+        );
+      }),
+    },
+    {
+      id: "A08I",
+      name: "모듈 항목",
+      path: "/api/v1/courses/:course_id/modules/:module_id/items",
+      execute: async (context) => {
+        const values: unknown[] = [];
+        let pagination = false;
+        let truncated = false;
+        let inspectedModules = 0;
+        let totalModules = 0;
+        for (const [courseId, moduleIds] of context.moduleIds) {
+          totalModules += moduleIds.length;
+          for (const moduleId of moduleIds.slice(0, MAX_AUDIT_MODULES_PER_COURSE)) {
+            const page = await list(
+              `/api/v1/courses/${encodeURIComponent(courseId)}/modules/${encodeURIComponent(moduleId)}/items`,
+              { "include[]": ["content_details"] },
+            );
+            inspectedModules += 1;
+            values.push(...page.items);
+            pagination ||= page.hadLinkHeader || page.pageCount > 1;
+            truncated ||= page.truncated;
+            for (const item of page.items) {
+              if (item.type !== "File") continue;
+              const fileId = asId(item.content_id);
+              if (fileId && !context.moduleFileIds.includes(fileId)) context.moduleFileIds.push(fileId);
+            }
+          }
+        }
+        const notes: string[] = [];
+        if (totalModules === 0) notes.push("조사할 모듈이 없어 호출하지 않았습니다.");
+        if (inspectedModules < totalModules) notes.push(`과목당 최대 ${MAX_AUDIT_MODULES_PER_COURSE}개 모듈만 조사했습니다.`);
+        if (truncated) notes.push("페이지 상한에 도달해 결과가 일부일 수 있습니다.");
+        return { values, pagination, called: inspectedModules > 0, ...(notes.length > 0 ? { notes } : {}) };
+      },
+    },
+    {
+      id: "A09I",
+      name: "모듈 연결 파일 메타데이터",
+      path: "/api/v1/files/:file_id",
+      execute: async (context) => {
+        const values: unknown[] = [];
+        for (const fileId of context.moduleFileIds.slice(0, MAX_AUDIT_MODULE_FILES)) {
+          values.push(await client.getJson<JsonObject>(`/api/v1/files/${encodeURIComponent(fileId)}`));
+        }
+        const notes: string[] = [];
+        if (context.moduleFileIds.length === 0) notes.push("모듈에서 File 유형 항목을 찾지 못해 호출하지 않았습니다.");
+        if (context.moduleFileIds.length > MAX_AUDIT_MODULE_FILES) notes.push(`최대 ${MAX_AUDIT_MODULE_FILES}개 파일 메타데이터만 조사했습니다.`);
+        return {
+          values,
+          pagination: false,
+          called: context.moduleFileIds.length > 0,
+          ...(notes.length > 0 ? { notes } : {}),
+        };
+      },
+    },
     { id: "A09", name: "파일", path: "/api/v1/courses/:course_id/files", execute: (context) => acrossCourses(context, "files") },
     { id: "A10", name: "페이지", path: "/api/v1/courses/:course_id/pages", execute: (context) => acrossCourses(context, "pages") },
     { id: "A11", name: "토론", path: "/api/v1/courses/:course_id/discussion_topics", execute: (context) => acrossCourses(context, "discussion_topics") },

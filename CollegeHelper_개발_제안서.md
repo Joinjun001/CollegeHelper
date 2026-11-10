@@ -195,6 +195,8 @@ HY-ON에서 현재 사용자 토큰으로 실제 접근 가능한 데이터, 응
 | A06 | 공지 | `GET /api/v1/announcements` | 제목, 본문, 게시일, 과목 |
 | A07 | 캘린더 | `GET /api/v1/calendar_events` | 일정과 과제 마감 이벤트 |
 | A08 | 모듈 | `GET /api/v1/courses/:course_id/modules` | 주차학습 구조와 항목 |
+| A08I | 모듈 항목 | `GET /api/v1/courses/:course_id/modules/:module_id/items` | 모듈에 연결된 자료 유형과 파일 ID |
+| A09I | 모듈 연결 파일 | `GET /api/v1/files/:file_id` | 학생에게 공개된 개별 파일 메타데이터 |
 | A09 | 파일 | `GET /api/v1/courses/:course_id/files` | 강의자료 메타데이터와 다운로드 URL |
 | A10 | 페이지 | `GET /api/v1/courses/:course_id/pages` | 강의 콘텐츠 페이지 목록 |
 | A11 | 토론 | `GET /api/v1/courses/:course_id/discussion_topics` | 게시판과 토론 주제 |
