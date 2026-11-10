@@ -413,16 +413,25 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         const contentTypeCounts = new Map<string, number>();
         const redirectHostCounts = new Map<string, number>();
         let cookieResponseCount = 0;
-        for (const launchUrl of context.learningResourceLaunchUrls) {
-          const inspection = await client.inspectLtiFormSubmission(launchUrl);
-          values.push(inspection);
-          incrementCount(statusCounts, String(inspection.httpStatus));
-          incrementCount(contentTypeCounts, inspection.contentType || "unknown");
-          if (inspection.redirectHost) incrementCount(redirectHostCounts, inspection.redirectHost);
-          if (inspection.setsCookie) cookieResponseCount += 1;
+        let targetCount = 0;
+        for (const [courseId, toolIds] of context.learningResourceToolIds) {
+          for (const toolId of toolIds) {
+            targetCount += 1;
+            const launch = await client.getJson<JsonObject>(
+              `/api/v1/courses/${encodeURIComponent(courseId)}/external_tools/sessionless_launch`,
+              { id: toolId, launch_type: "course_navigation" },
+            );
+            if (typeof launch.url !== "string") throw new CanvasError("INVALID_RESPONSE", "외부도구 실행 URL이 없습니다.");
+            const inspection = await client.inspectLtiFormSubmission(launch.url);
+            values.push(inspection);
+            incrementCount(statusCounts, String(inspection.httpStatus));
+            incrementCount(contentTypeCounts, inspection.contentType || "unknown");
+            if (inspection.redirectHost) incrementCount(redirectHostCounts, inspection.redirectHost);
+            if (inspection.setsCookie) cookieResponseCount += 1;
+          }
         }
         const notes: string[] = [];
-        if (context.learningResourceLaunchUrls.length === 0) notes.push("제출할 LTI 로그인 폼이 없어 호출하지 않았습니다.");
+        if (targetCount === 0) notes.push("제출할 LTI 로그인 폼이 없어 호출하지 않았습니다.");
         if (statusCounts.size > 0) notes.push(`HTTP 상태 수: ${renderCounts(statusCounts)}`);
         if (contentTypeCounts.size > 0) notes.push(`콘텐츠 유형 수: ${renderCounts(contentTypeCounts)}`);
         if (redirectHostCounts.size > 0) notes.push(`리다이렉트 호스트 수: ${renderCounts(redirectHostCounts)}`);
@@ -430,7 +439,7 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         return {
           values,
           pagination: false,
-          called: context.learningResourceLaunchUrls.length > 0,
+          called: targetCount > 0,
           ...(notes.length > 0 ? { notes } : {}),
         };
       },
