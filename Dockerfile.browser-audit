@@ -1,0 +1,19 @@
+FROM mcr.microsoft.com/playwright:v1.64.1-noble
+
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tsconfig.json tsconfig.build.json ./
+COPY src ./src
+COPY scripts ./scripts
+RUN npm run build
+
+ENV NODE_ENV=production
+
+USER pwuser
+
+CMD ["node", "dist/scripts/audit-learning-resource-browser.js"]

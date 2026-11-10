@@ -35,3 +35,22 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: "no"
+
+  learning-resource-browser-audit:
+    build:
+      context: .
+      dockerfile: Dockerfile.browser-audit
+    profiles: ["browser-audit"]
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      AUDIT_MAX_COURSES: 1
+      AUDIT_COURSE_ID: ${AUDIT_COURSE_ID:-}
+    ipc: host
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"

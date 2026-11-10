@@ -128,6 +128,12 @@ npm run smoke:mcp
 docker compose --profile audit run --rm --user "$(id -u):$(id -g)" canvas-audit
 ```
 
+강의자료실처럼 JavaScript로 목록을 불러오는 외부도구는 감사 전용 Playwright 컨테이너에서 네트워크 응답 본문이나 HAR를 저장하지 않고 비식별 경로만 확인합니다.
+
+```bash
+AUDIT_COURSE_ID=<COURSE_ID> docker compose --profile browser-audit run --rm learning-resource-browser-audit
+```
+
 ## TypeScript 설정의 역할
 
 `tsconfig.json`, ESLint, Vitest는 CollegeHelper를 TypeScript로 안전하게 개발하고 검증하기 위한 내부 도구입니다. ChatGPT에서 플러그인을 호출할 때 사용자가 직접 다룰 파일은 아닙니다. 배포 환경에서는 빌드된 JavaScript와 MCP 서버만 실행됩니다.
