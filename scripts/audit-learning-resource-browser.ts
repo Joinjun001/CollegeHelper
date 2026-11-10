@@ -84,6 +84,7 @@ async function main(): Promise<void> {
   const resourceShapes: ResourceResponseShape[] = [];
   const resourceViewUrls: string[] = [];
   const viewUrlInspections: ViewUrlInspection[] = [];
+  const domUrlPatterns = new Set<string>();
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   try {
     for (const target of targets) {
@@ -110,6 +111,21 @@ async function main(): Promise<void> {
         if (resourceInspection.firstViewUrl) resourceViewUrls.push(resourceInspection.firstViewUrl);
       }
       await page.waitForTimeout(2_000);
+      const domUrls = await page.locator("[href], [src], [data-url], [data-href], [data-file-url]").evaluateAll((elements) =>
+        elements.flatMap((element) => ["href", "src", "data-url", "data-href", "data-file-url"]
+          .map((attribute) => element.getAttribute(attribute))
+          .filter((value): value is string => typeof value === "string" && value.length > 0)),
+      );
+      for (const value of domUrls) {
+        try {
+          const url = new URL(value, baseOrigin);
+          if (url.protocol !== "https:" || url.origin !== baseOrigin) continue;
+          const pattern = sanitizeNetworkPath(url.pathname);
+          if (/(file|resource|download|content|attach|viewer|preview)/i.test(pattern)) domUrlPatterns.add(pattern);
+        } catch {
+          // Invalid DOM URLs are ignored; raw values are never recorded.
+        }
+      }
       const firstViewUrl = resourceViewUrls[0];
       if (firstViewUrl) {
         const viewUrl = new URL(firstViewUrl, baseOrigin);
@@ -151,6 +167,7 @@ async function main(): Promise<void> {
       })),
     resourceResponseShapes: resourceShapes,
     viewUrlInspections,
+    domUrlPatterns: [...domUrlPatterns].sort(),
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
