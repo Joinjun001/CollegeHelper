@@ -84,7 +84,6 @@ async function main(): Promise<void> {
   const resourceShapes: ResourceResponseShape[] = [];
   const resourceViewUrls: string[] = [];
   const viewUrlInspections: ViewUrlInspection[] = [];
-  const shapeInspections: Array<Promise<void>> = [];
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   try {
     for (const target of targets) {
@@ -98,20 +97,19 @@ async function main(): Promise<void> {
       const context = await browser.newContext({ serviceWorkers: "block" });
       const page = await context.newPage();
       page.on("request", (request) => recordRequest(observations, request, baseOrigin));
-      page.on("response", (response) => {
-        recordResponse(observations, response, baseOrigin);
+      page.on("response", (response) => recordResponse(observations, response, baseOrigin));
+      const resourceResponsePromise = page.waitForResponse((response) => {
         const url = safeSameOriginUrl(response.url(), baseOrigin);
-        if (url?.pathname.endsWith("/resources_db") && response.status() === 200) {
-          shapeInspections.push(inspectResourceResponse(response).then((inspection) => {
-            if (!inspection) return;
-            resourceShapes.push(inspection.shape);
-            if (inspection.firstViewUrl) resourceViewUrls.push(inspection.firstViewUrl);
-          }));
-        }
-      });
+        return url?.pathname.endsWith("/resources_db") === true && response.status() === 200;
+      }, { timeout: 30_000 });
       await page.goto(launchUrl.toString(), { waitUntil: "domcontentloaded", timeout: 30_000 });
-      await page.waitForTimeout(8_000);
-      await Promise.all(shapeInspections);
+      const resourceResponse = await resourceResponsePromise;
+      const resourceInspection = await inspectResourceResponse(resourceResponse);
+      if (resourceInspection) {
+        resourceShapes.push(resourceInspection.shape);
+        if (resourceInspection.firstViewUrl) resourceViewUrls.push(resourceInspection.firstViewUrl);
+      }
+      await page.waitForTimeout(2_000);
       const firstViewUrl = resourceViewUrls[0];
       if (firstViewUrl) {
         const viewUrl = new URL(firstViewUrl, baseOrigin);
@@ -134,7 +132,6 @@ async function main(): Promise<void> {
   } finally {
     await browser.close();
   }
-  await Promise.all(shapeInspections);
 
   const result = {
     schemaVersion: 1,
