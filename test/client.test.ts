@@ -101,6 +101,7 @@ describe("CanvasClient", () => {
       inlineScriptCount: 0,
       jsonScriptCount: 0,
       scriptSourceHosts: [],
+      sameOriginScriptUrls: [],
       metaRefreshCount: 0,
       nextFormActionHost: null,
       nextFormMethod: null,
@@ -113,5 +114,20 @@ describe("CanvasClient", () => {
     if (!(postBody instanceof URLSearchParams)) throw new Error("Expected URLSearchParams body");
     expect(postBody.toString()).toBe("signed=a%26b");
     expect(new Headers(post?.[1]?.headers).has("authorization")).toBe(false);
+  });
+
+  it("동일 호스트 스크립트에서 식별자를 제거한 자료 API 경로만 찾는다", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+      'const a="/api/resources/12345/download?token=secret"; const b="/unrelated/path";',
+      { status: 200, headers: { "content-type": "application/javascript" } },
+    ));
+    const client = new CanvasClient({ baseUrl: "https://canvas.example.edu", accessToken: "secret", timeoutMs: 1_000, fetchImpl });
+
+    await expect(client.inspectLearningResourceScript("https://canvas.example.edu/assets/app.js")).resolves.toEqual({
+      httpStatus: 200,
+      contentType: "application/javascript",
+      routePatterns: ["/api/resources/:id/download"],
+    });
+    expect(new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).has("authorization")).toBe(false);
   });
 });

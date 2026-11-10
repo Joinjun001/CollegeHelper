@@ -205,6 +205,7 @@ HY-ON에서 현재 사용자 토큰으로 실제 접근 가능한 데이터, 응
 | A14 | 강의자료실 외부도구 실행 | `GET /api/v1/courses/:course_id/external_tools/sessionless_launch` | 공식 LTI 실행 URL 지원 여부 |
 | A15 | 강의자료실 실행 응답 | sessionless launch URL에 인증 헤더 없이 `GET` | LTI 실행에 필요한 응답 형식과 전송 방식 |
 | A16 | 강의자료실 LTI 로그인 | 공식 sessionless launch가 생성한 동일 호스트 폼만 `POST` | 자료실 세션 생성 응답과 쿠키 필요 여부 |
+| A17 | 강의자료실 스크립트 경로 | 동일 호스트의 정적 JavaScript를 인증 헤더 없이 `GET` | 자료 목록·다운로드 API의 비식별 경로 패턴 |
 
 후보 엔드포인트는 Canvas 문서상의 가능성을 의미하며, 실제 지원 여부는 감사 스크립트의 결과로 결정한다.
 

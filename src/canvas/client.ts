@@ -42,6 +42,7 @@ export interface LtiFormSubmissionInspection {
   inlineScriptCount: number;
   jsonScriptCount: number;
   scriptSourceHosts: string[];
+  sameOriginScriptUrls: string[];
   metaRefreshCount: number;
   nextFormActionHost: string | null;
   nextFormMethod: string | null;
@@ -185,6 +186,7 @@ export class CanvasClient {
     let inlineScriptCount = 0;
     let jsonScriptCount = 0;
     const scriptSourceHosts = new Set<string>();
+    const sameOriginScriptUrls = new Set<string>();
     let metaRefreshCount = 0;
     let nextFormActionHost: string | null = null;
     let nextFormMethod: string | null = null;
@@ -216,6 +218,14 @@ export class CanvasClient {
           externalScriptCount += 1;
           const host = safeHttpsHostname(decodeHtmlAttribute(source), actionUrl);
           if (host) scriptSourceHosts.add(host);
+          try {
+            const scriptUrl = new URL(decodeHtmlAttribute(source), actionUrl);
+            if (scriptUrl.protocol === "https:" && scriptUrl.origin === this.baseUrl.origin) {
+              sameOriginScriptUrls.add(scriptUrl.toString());
+            }
+          } catch {
+            // Invalid script URLs are ignored; raw values are never recorded.
+          }
         } else {
           inlineScriptCount += 1;
         }
@@ -248,10 +258,34 @@ export class CanvasClient {
       inlineScriptCount,
       jsonScriptCount,
       scriptSourceHosts: [...scriptSourceHosts].sort(),
+      sameOriginScriptUrls: [...sameOriginScriptUrls].sort(),
       metaRefreshCount,
       nextFormActionHost,
       nextFormMethod,
     };
+  }
+
+  async inspectLearningResourceScript(value: string): Promise<{ httpStatus: number; contentType: string; routePatterns: string[] }> {
+    const url = new URL(value, this.baseUrl);
+    if (url.protocol !== "https:" || url.origin !== this.baseUrl.origin) {
+      throw new CanvasError("INVALID_RESPONSE", "강의자료실 스크립트 URL이 허용된 Canvas 호스트가 아닙니다.");
+    }
+    const response = await this.fetchImpl(url, {
+      method: "GET",
+      headers: { Accept: "application/javascript,text/javascript" },
+      redirect: "manual",
+    });
+    const contentType = (response.headers.get("content-type") ?? "").split(";", 1)[0]?.trim().toLowerCase() ?? "";
+    const script = await readLimitedText(response, 5_242_880);
+    const routes = new Set<string>();
+    for (const match of script.matchAll(/["'](\/[^"'`\s]{1,300})["']/g)) {
+      const candidate = match[1];
+      if (!candidate || !/(api|file|lecture|content|resource|download|board|attach)/i.test(candidate)) continue;
+      const pattern = sanitizeRoutePattern(candidate);
+      if (pattern) routes.add(pattern);
+      if (routes.size >= 50) break;
+    }
+    return { httpStatus: response.status, contentType, routePatterns: [...routes].sort() };
   }
 
   async getAllPages<T>(path: string, query: Query = {}, maxPages = 10): Promise<CanvasPage<T>> {
@@ -390,6 +424,17 @@ function decodeHtmlAttribute(value: string): string {
     .replaceAll("&lt;", "<")
     .replaceAll("&gt;", ">")
     .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)));
+}
+
+function sanitizeRoutePattern(value: string): string | null {
+  const path = value.split(/[?#]/, 1)[0];
+  if (!path?.startsWith("/") || path.includes("..") || path.includes("\\")) return null;
+  return path
+    .replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ":uuid")
+    .replace(/[0-9a-f]{16,}/gi, ":token")
+    .replace(/\d+/g, ":id")
+    .replace(/\/{2,}/g, "/")
+    .slice(0, 240);
 }
 
 async function readLimitedText(response: Response, maxBytes: number): Promise<string> {

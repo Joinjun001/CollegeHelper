@@ -11,6 +11,7 @@ interface AuditContext {
   moduleFileIds: string[];
   learningResourceToolIds: Map<string, string[]>;
   learningResourceLaunchUrls: string[];
+  learningResourceScriptUrls: string[];
 }
 
 interface Observation {
@@ -44,6 +45,7 @@ export async function runCanvasAudit(client: CanvasClient, options: AuditRunnerO
     moduleFileIds: [],
     learningResourceToolIds: new Map(),
     learningResourceLaunchUrls: [],
+    learningResourceScriptUrls: [],
   };
   const definitions = createDefinitions(client, options);
   const results: AuditResult[] = [];
@@ -453,6 +455,9 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
             inlineScriptCount += inspection.inlineScriptCount;
             jsonScriptCount += inspection.jsonScriptCount;
             for (const host of inspection.scriptSourceHosts) incrementCount(scriptSourceHostCounts, host);
+            for (const scriptUrl of inspection.sameOriginScriptUrls) {
+              if (!context.learningResourceScriptUrls.includes(scriptUrl)) context.learningResourceScriptUrls.push(scriptUrl);
+            }
             metaRefreshCount += inspection.metaRefreshCount;
             if (inspection.nextFormMethod) incrementCount(nextFormMethodCounts, inspection.nextFormMethod);
             if (inspection.nextFormActionHost) incrementCount(nextFormActionHostCounts, inspection.nextFormActionHost);
@@ -482,6 +487,35 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
           values,
           pagination: false,
           called: targetCount > 0,
+          ...(notes.length > 0 ? { notes } : {}),
+        };
+      },
+    },
+    {
+      id: "A17",
+      name: "강의자료실 스크립트 경로",
+      path: "learning_resource.script",
+      execute: async (context) => {
+        const values: unknown[] = [];
+        const routePatterns = new Set<string>();
+        const statusCounts = new Map<string, number>();
+        const contentTypeCounts = new Map<string, number>();
+        for (const scriptUrl of context.learningResourceScriptUrls) {
+          const inspection = await client.inspectLearningResourceScript(scriptUrl);
+          values.push(inspection);
+          incrementCount(statusCounts, String(inspection.httpStatus));
+          incrementCount(contentTypeCounts, inspection.contentType || "unknown");
+          for (const pattern of inspection.routePatterns) routePatterns.add(pattern);
+        }
+        const notes: string[] = [];
+        if (context.learningResourceScriptUrls.length === 0) notes.push("확인할 동일 호스트 스크립트가 없습니다.");
+        if (statusCounts.size > 0) notes.push(`HTTP 상태 수: ${renderCounts(statusCounts)}`);
+        if (contentTypeCounts.size > 0) notes.push(`콘텐츠 유형 수: ${renderCounts(contentTypeCounts)}`);
+        if (routePatterns.size > 0) notes.push(`비식별 경로 패턴: ${[...routePatterns].sort().join(", ")}`);
+        return {
+          values,
+          pagination: false,
+          called: context.learningResourceScriptUrls.length > 0,
           ...(notes.length > 0 ? { notes } : {}),
         };
       },
