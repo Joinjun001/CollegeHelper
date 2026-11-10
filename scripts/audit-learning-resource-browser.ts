@@ -16,6 +16,17 @@ interface CourseTarget {
   toolId: string;
 }
 
+interface JsonArrayShape {
+  path: string;
+  itemCount: number;
+  itemFields: string[];
+}
+
+interface ResourceResponseShape {
+  topLevelFields: string[];
+  arrays: JsonArrayShape[];
+}
+
 async function main(): Promise<void> {
   const config = loadConfig();
   const client = new CanvasClient({
@@ -50,6 +61,8 @@ async function main(): Promise<void> {
 
   const baseOrigin = new URL(config.canvasBaseUrl).origin;
   const observations = new Map<string, NetworkObservation>();
+  const resourceShapes: ResourceResponseShape[] = [];
+  const shapeInspections: Array<Promise<void>> = [];
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   try {
     for (const target of targets) {
@@ -63,14 +76,24 @@ async function main(): Promise<void> {
       const context = await browser.newContext({ serviceWorkers: "block" });
       const page = await context.newPage();
       page.on("request", (request) => recordRequest(observations, request, baseOrigin));
-      page.on("response", (response) => recordResponse(observations, response, baseOrigin));
+      page.on("response", (response) => {
+        recordResponse(observations, response, baseOrigin);
+        const url = safeSameOriginUrl(response.url(), baseOrigin);
+        if (url?.pathname.endsWith("/resources_db") && response.status() === 200) {
+          shapeInspections.push(inspectResourceResponse(response).then((shape) => {
+            if (shape) resourceShapes.push(shape);
+          }));
+        }
+      });
       await page.goto(launchUrl.toString(), { waitUntil: "domcontentloaded", timeout: 30_000 });
       await page.waitForTimeout(8_000);
+      await Promise.all(shapeInspections);
       await context.close();
     }
   } finally {
     await browser.close();
   }
+  await Promise.all(shapeInspections);
 
   const result = {
     schemaVersion: 1,
@@ -88,6 +111,7 @@ async function main(): Promise<void> {
         count: item.count,
         statuses: [...item.statuses].sort((left, right) => left - right),
       })),
+    resourceResponseShapes: resourceShapes,
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
@@ -143,6 +167,40 @@ function asId(value: unknown): string | undefined {
   if (typeof value === "string" && value.length > 0) return value;
   if (typeof value === "number" && Number.isSafeInteger(value)) return String(value);
   return undefined;
+}
+
+async function inspectResourceResponse(response: Response): Promise<ResourceResponseShape | null> {
+  try {
+    const value = await response.json() as unknown;
+    return {
+      topLevelFields: isRecord(value) ? Object.keys(value).sort().slice(0, 100) : [],
+      arrays: collectArrayShapes(value),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function collectArrayShapes(value: unknown, path = "$", depth = 0): JsonArrayShape[] {
+  if (depth > 4) return [];
+  if (Array.isArray(value)) {
+    const firstObject = value.find(isRecord);
+    const current: JsonArrayShape = {
+      path,
+      itemCount: value.length,
+      itemFields: firstObject ? Object.keys(firstObject).sort().slice(0, 100) : [],
+    };
+    const nested = firstObject
+      ? Object.entries(firstObject).flatMap(([key, child]) => collectArrayShapes(child, `${path}[].${key}`, depth + 1))
+      : [];
+    return [current, ...nested];
+  }
+  if (!isRecord(value)) return [];
+  return Object.entries(value).flatMap(([key, child]) => collectArrayShapes(child, `${path}.${key}`, depth + 1));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 main().catch(() => {
