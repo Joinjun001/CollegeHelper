@@ -185,6 +185,7 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
       execute: async (context) => {
         const values: unknown[] = [];
         const typeCounts = new Map<string, number>();
+        const externalHostCounts = new Map<string, number>();
         let pagination = false;
         let truncated = false;
         let inspectedModules = 0;
@@ -204,6 +205,17 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
               if (typeof item.type === "string") {
                 typeCounts.set(item.type, (typeCounts.get(item.type) ?? 0) + 1);
               }
+              if (item.type === "ExternalTool" && typeof item.external_url === "string") {
+                try {
+                  const externalUrl = new URL(item.external_url);
+                  if (externalUrl.protocol === "https:") {
+                    const hostname = externalUrl.hostname.toLowerCase();
+                    externalHostCounts.set(hostname, (externalHostCounts.get(hostname) ?? 0) + 1);
+                  }
+                } catch {
+                  // Invalid external URLs are ignored; raw values are never recorded.
+                }
+              }
               if (item.type !== "File") continue;
               const fileId = asId(item.content_id);
               if (fileId && !context.moduleFileIds.includes(fileId)) context.moduleFileIds.push(fileId);
@@ -218,6 +230,13 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
             .map(([type, count]) => `${type}=${count}`)
             .join(", ");
           notes.push(`모듈 항목 유형 수: ${summary}`);
+        }
+        if (externalHostCounts.size > 0) {
+          const summary = [...externalHostCounts.entries()]
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([hostname, count]) => `${hostname}=${count}`)
+            .join(", ");
+          notes.push(`ExternalTool 호스트 수: ${summary}`);
         }
         if (inspectedModules < totalModules) notes.push(`과목당 최대 ${MAX_AUDIT_MODULES_PER_COURSE}개 모듈만 조사했습니다.`);
         if (truncated) notes.push("페이지 상한에 도달해 결과가 일부일 수 있습니다.");
