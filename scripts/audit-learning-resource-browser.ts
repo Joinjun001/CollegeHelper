@@ -89,6 +89,9 @@ async function main(): Promise<void> {
   const viewUrlInspections: ViewUrlInspection[] = [];
   const domUrlPatterns = new Set<string>();
   const externalDomUrlPatterns = new Set<string>();
+  let dataUrlCount = 0;
+  let blobUrlCount = 0;
+  const dataUrlMimeTypes = new Set<string>();
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   try {
     for (const target of targets) {
@@ -130,6 +133,16 @@ async function main(): Promise<void> {
       );
       for (const value of domUrls) {
         try {
+          if (value.startsWith("data:")) {
+            dataUrlCount += 1;
+            const mimeType = /^data:([^;,]+)/i.exec(value)?.[1]?.toLowerCase();
+            if (mimeType) dataUrlMimeTypes.add(mimeType);
+            continue;
+          }
+          if (value.startsWith("blob:")) {
+            blobUrlCount += 1;
+            continue;
+          }
           const url = new URL(value, baseOrigin);
           if (url.protocol !== "https:") continue;
           const pattern = sanitizeNetworkPath(url.pathname);
@@ -187,6 +200,9 @@ async function main(): Promise<void> {
     viewUrlInspections,
     domUrlPatterns: [...domUrlPatterns].sort(),
     externalDomUrlPatterns: [...externalDomUrlPatterns].sort(),
+    dataUrlCount,
+    blobUrlCount,
+    dataUrlMimeTypes: [...dataUrlMimeTypes].sort(),
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
