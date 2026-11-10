@@ -417,6 +417,12 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         let pdfLinkCount = 0;
         let downloadLinkCount = 0;
         let iframeCount = 0;
+        let formCount = 0;
+        let hiddenInputCount = 0;
+        let scriptCount = 0;
+        let metaRefreshCount = 0;
+        const nextFormMethodCounts = new Map<string, number>();
+        const nextFormActionHostCounts = new Map<string, number>();
         let targetCount = 0;
         for (const [courseId, toolIds] of context.learningResourceToolIds) {
           for (const toolId of toolIds) {
@@ -436,6 +442,12 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
             pdfLinkCount += inspection.pdfLinkCount;
             downloadLinkCount += inspection.downloadLinkCount;
             iframeCount += inspection.iframeCount;
+            formCount += inspection.formCount;
+            hiddenInputCount += inspection.hiddenInputCount;
+            scriptCount += inspection.scriptCount;
+            metaRefreshCount += inspection.metaRefreshCount;
+            if (inspection.nextFormMethod) incrementCount(nextFormMethodCounts, inspection.nextFormMethod);
+            if (inspection.nextFormActionHost) incrementCount(nextFormActionHostCounts, inspection.nextFormActionHost);
           }
         }
         const notes: string[] = [];
@@ -448,6 +460,12 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         notes.push(`PDF 직접 링크 수: ${pdfLinkCount}`);
         notes.push(`download 속성 링크 수: ${downloadLinkCount}`);
         notes.push(`iframe 수: ${iframeCount}`);
+        notes.push(`추가 form 수: ${formCount}`);
+        notes.push(`추가 hidden input 수: ${hiddenInputCount}`);
+        notes.push(`script 수: ${scriptCount}`);
+        notes.push(`meta refresh 수: ${metaRefreshCount}`);
+        if (nextFormMethodCounts.size > 0) notes.push(`추가 폼 방식 수: ${renderCounts(nextFormMethodCounts)}`);
+        if (nextFormActionHostCounts.size > 0) notes.push(`추가 폼 대상 호스트 수: ${renderCounts(nextFormActionHostCounts)}`);
         return {
           values,
           pagination: false,

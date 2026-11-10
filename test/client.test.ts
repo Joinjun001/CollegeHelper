@@ -94,6 +94,12 @@ describe("CanvasClient", () => {
       pdfLinkCount: 1,
       downloadLinkCount: 1,
       iframeCount: 1,
+      formCount: 0,
+      hiddenInputCount: 0,
+      scriptCount: 0,
+      metaRefreshCount: 0,
+      nextFormActionHost: null,
+      nextFormMethod: null,
     });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const post = fetchImpl.mock.calls[1];

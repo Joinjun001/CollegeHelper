@@ -35,6 +35,12 @@ export interface LtiFormSubmissionInspection {
   pdfLinkCount: number;
   downloadLinkCount: number;
   iframeCount: number;
+  formCount: number;
+  hiddenInputCount: number;
+  scriptCount: number;
+  metaRefreshCount: number;
+  nextFormActionHost: string | null;
+  nextFormMethod: string | null;
 }
 
 interface JsonResponse<T> {
@@ -168,6 +174,12 @@ export class CanvasClient {
     let pdfLinkCount = 0;
     let downloadLinkCount = 0;
     let iframeCount = 0;
+    let formCount = 0;
+    let hiddenInputCount = 0;
+    let scriptCount = 0;
+    let metaRefreshCount = 0;
+    let nextFormActionHost: string | null = null;
+    let nextFormMethod: string | null = null;
     if (contentType === "text/html" || contentType === "application/xhtml+xml") {
       const responseHtml = await readLimitedText(response, 2_097_152);
       for (const match of responseHtml.matchAll(/<a\b[^>]*>/gi)) {
@@ -184,6 +196,17 @@ export class CanvasClient {
         }
       }
       iframeCount = [...responseHtml.matchAll(/<iframe\b[^>]*>/gi)].length;
+      const responseForms = [...responseHtml.matchAll(/<form\b[^>]*>/gi)];
+      formCount = responseForms.length;
+      hiddenInputCount = [...responseHtml.matchAll(/<input\b[^>]*\btype\s*=\s*["']hidden["'][^>]*>/gi)].length;
+      scriptCount = [...responseHtml.matchAll(/<script\b[^>]*>/gi)].length;
+      metaRefreshCount = [...responseHtml.matchAll(/<meta\b[^>]*http-equiv\s*=\s*["']refresh["'][^>]*>/gi)].length;
+      const nextFormTag = responseForms[0]?.[0];
+      if (nextFormTag) {
+        const nextAction = /\baction\s*=\s*["']([^"']+)["']/i.exec(nextFormTag)?.[1];
+        nextFormActionHost = safeHttpsHostname(nextAction ? decodeHtmlAttribute(nextAction) : null, actionUrl);
+        nextFormMethod = /\bmethod\s*=\s*["']([^"']+)["']/i.exec(nextFormTag)?.[1]?.toUpperCase() ?? "GET";
+      }
     } else {
       await response.body?.cancel();
     }
@@ -196,6 +219,12 @@ export class CanvasClient {
       pdfLinkCount,
       downloadLinkCount,
       iframeCount,
+      formCount,
+      hiddenInputCount,
+      scriptCount,
+      metaRefreshCount,
+      nextFormActionHost,
+      nextFormMethod,
     };
   }
 
