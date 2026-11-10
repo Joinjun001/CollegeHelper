@@ -184,6 +184,7 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
       path: "/api/v1/courses/:course_id/modules/:module_id/items",
       execute: async (context) => {
         const values: unknown[] = [];
+        const typeCounts = new Map<string, number>();
         let pagination = false;
         let truncated = false;
         let inspectedModules = 0;
@@ -200,6 +201,9 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
             pagination ||= page.hadLinkHeader || page.pageCount > 1;
             truncated ||= page.truncated;
             for (const item of page.items) {
+              if (typeof item.type === "string") {
+                typeCounts.set(item.type, (typeCounts.get(item.type) ?? 0) + 1);
+              }
               if (item.type !== "File") continue;
               const fileId = asId(item.content_id);
               if (fileId && !context.moduleFileIds.includes(fileId)) context.moduleFileIds.push(fileId);
@@ -208,6 +212,13 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         }
         const notes: string[] = [];
         if (totalModules === 0) notes.push("조사할 모듈이 없어 호출하지 않았습니다.");
+        if (typeCounts.size > 0) {
+          const summary = [...typeCounts.entries()]
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([type, count]) => `${type}=${count}`)
+            .join(", ");
+          notes.push(`모듈 항목 유형 수: ${summary}`);
+        }
         if (inspectedModules < totalModules) notes.push(`과목당 최대 ${MAX_AUDIT_MODULES_PER_COURSE}개 모듈만 조사했습니다.`);
         if (truncated) notes.push("페이지 상한에 도달해 결과가 일부일 수 있습니다.");
         return { values, pagination, called: inspectedModules > 0, ...(notes.length > 0 ? { notes } : {}) };
