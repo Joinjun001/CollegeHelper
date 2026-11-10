@@ -79,17 +79,21 @@ describe("CanvasClient", () => {
         '<html><form method="post" action="https://canvas.example.edu/lti/login"><input type="hidden" name="signed" value="a&amp;b"></form></html>',
         { status: 200, headers: { "content-type": "text/html" } },
       ))
-      .mockResolvedValueOnce(new Response(null, {
-        status: 302,
-        headers: { location: "https://canvas.example.edu/learning/resources", "set-cookie": "session=fake; Secure" },
-      }));
+      .mockResolvedValueOnce(new Response(
+        '<html><a href="/learning/note.pdf" download>PDF</a><a href="/learning/view">View</a><iframe src="/viewer"></iframe></html>',
+        { status: 200, headers: { "content-type": "text/html", "set-cookie": "session=fake; Secure" } },
+      ));
     const client = new CanvasClient({ baseUrl: "https://canvas.example.edu", accessToken: "secret", timeoutMs: 1_000, fetchImpl });
 
     await expect(client.inspectLtiFormSubmission("https://canvas.example.edu/sessionless/launch?id=1")).resolves.toEqual({
-      httpStatus: 302,
-      contentType: "",
-      redirectHost: "canvas.example.edu",
+      httpStatus: 200,
+      contentType: "text/html",
+      redirectHost: null,
       setsCookie: true,
+      anchorCount: 2,
+      pdfLinkCount: 1,
+      downloadLinkCount: 1,
+      iframeCount: 1,
     });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const post = fetchImpl.mock.calls[1];

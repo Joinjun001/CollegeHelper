@@ -31,6 +31,10 @@ export interface LtiFormSubmissionInspection {
   contentType: string;
   redirectHost: string | null;
   setsCookie: boolean;
+  anchorCount: number;
+  pdfLinkCount: number;
+  downloadLinkCount: number;
+  iframeCount: number;
 }
 
 interface JsonResponse<T> {
@@ -160,8 +164,39 @@ export class CanvasClient {
     const contentType = (response.headers.get("content-type") ?? "").split(";", 1)[0]?.trim().toLowerCase() ?? "";
     const redirectHost = safeHttpsHostname(response.headers.get("location"), actionUrl);
     const setsCookie = response.headers.has("set-cookie");
-    await response.body?.cancel();
-    return { httpStatus: response.status, contentType, redirectHost, setsCookie };
+    let anchorCount = 0;
+    let pdfLinkCount = 0;
+    let downloadLinkCount = 0;
+    let iframeCount = 0;
+    if (contentType === "text/html" || contentType === "application/xhtml+xml") {
+      const responseHtml = await readLimitedText(response, 2_097_152);
+      for (const match of responseHtml.matchAll(/<a\b[^>]*>/gi)) {
+        anchorCount += 1;
+        const tag = match[0];
+        if (/\bdownload(?:\s|=|>)/i.test(tag)) downloadLinkCount += 1;
+        const href = /\bhref\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
+        if (!href) continue;
+        try {
+          const linkUrl = new URL(decodeHtmlAttribute(href), actionUrl);
+          if (linkUrl.protocol === "https:" && linkUrl.pathname.toLowerCase().endsWith(".pdf")) pdfLinkCount += 1;
+        } catch {
+          // Invalid link values are ignored; raw values are never recorded.
+        }
+      }
+      iframeCount = [...responseHtml.matchAll(/<iframe\b[^>]*>/gi)].length;
+    } else {
+      await response.body?.cancel();
+    }
+    return {
+      httpStatus: response.status,
+      contentType,
+      redirectHost,
+      setsCookie,
+      anchorCount,
+      pdfLinkCount,
+      downloadLinkCount,
+      iframeCount,
+    };
   }
 
   async getAllPages<T>(path: string, query: Query = {}, maxPages = 10): Promise<CanvasPage<T>> {

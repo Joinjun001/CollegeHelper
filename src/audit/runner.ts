@@ -413,6 +413,10 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         const contentTypeCounts = new Map<string, number>();
         const redirectHostCounts = new Map<string, number>();
         let cookieResponseCount = 0;
+        let anchorCount = 0;
+        let pdfLinkCount = 0;
+        let downloadLinkCount = 0;
+        let iframeCount = 0;
         let targetCount = 0;
         for (const [courseId, toolIds] of context.learningResourceToolIds) {
           for (const toolId of toolIds) {
@@ -428,6 +432,10 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
             incrementCount(contentTypeCounts, inspection.contentType || "unknown");
             if (inspection.redirectHost) incrementCount(redirectHostCounts, inspection.redirectHost);
             if (inspection.setsCookie) cookieResponseCount += 1;
+            anchorCount += inspection.anchorCount;
+            pdfLinkCount += inspection.pdfLinkCount;
+            downloadLinkCount += inspection.downloadLinkCount;
+            iframeCount += inspection.iframeCount;
           }
         }
         const notes: string[] = [];
@@ -436,6 +444,10 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         if (contentTypeCounts.size > 0) notes.push(`콘텐츠 유형 수: ${renderCounts(contentTypeCounts)}`);
         if (redirectHostCounts.size > 0) notes.push(`리다이렉트 호스트 수: ${renderCounts(redirectHostCounts)}`);
         notes.push(`쿠키 설정 응답 수: ${cookieResponseCount}`);
+        notes.push(`HTML 링크 수: ${anchorCount}`);
+        notes.push(`PDF 직접 링크 수: ${pdfLinkCount}`);
+        notes.push(`download 속성 링크 수: ${downloadLinkCount}`);
+        notes.push(`iframe 수: ${iframeCount}`);
         return {
           values,
           pagination: false,
