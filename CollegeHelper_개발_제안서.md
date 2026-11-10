@@ -415,6 +415,21 @@ Canvas의 과제 설명과 공지 본문은 HTML일 수 있다.
 
 초기 버전은 파일 자체를 모델에 자동 업로드하지 않는다. 파일명, 크기, 수정일, 콘텐츠 유형과 사용자가 열 수 있는 URL만 제공한다.
 
+### T07 `get_course_module_items`
+
+목적: 감사에서 지원이 확인된 과목 모듈의 과제·외부 학습자료 항목 조회
+
+입력:
+
+```ts
+{
+  courseId: string;
+  moduleId: string;
+}
+```
+
+출력에는 항목 ID, 제목, 유형, 순서, 연결된 콘텐츠 ID와 동일 Canvas 호스트의 실행 링크만 포함한다. 감사 결과 학습자료는 Canvas `File`이 아니라 `ExternalTool`이므로 외부 실행 URL, LTI 파라미터, 본문 및 첨부파일은 반환하지 않는다.
+
 ### 8.1 공통 MCP 규칙
 
 - 모든 도구에 `readOnlyHint: true`를 설정한다.

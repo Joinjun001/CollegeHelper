@@ -54,6 +54,16 @@ const ModuleSchema = z.object({
   items_count: z.number().int().optional(),
 }).passthrough();
 
+const ModuleItemSchema = z.object({
+  id: IdentifierSchema,
+  module_id: IdentifierSchema,
+  position: z.number().int().optional(),
+  title: z.string().min(1),
+  type: z.string().min(1),
+  content_id: IdentifierSchema.optional(),
+  html_url: z.string().url().optional(),
+}).passthrough();
+
 export type TaskState = "all" | "pending" | "submitted";
 
 export interface DateRange {
@@ -172,6 +182,30 @@ export class CanvasService {
     });
     modules.sort((left, right) => Number(left.position ?? Number.MAX_SAFE_INTEGER) - Number(right.position ?? Number.MAX_SAFE_INTEGER));
     return envelope({ courseId, modules, truncated: page.truncated });
+  }
+
+  async listModuleItems(courseId: string, moduleId: string): Promise<Record<string, unknown>> {
+    const page = await this.client.getAllPages<unknown>(
+      `/api/v1/courses/${encodeURIComponent(courseId)}/modules/${encodeURIComponent(moduleId)}/items`,
+      { "include[]": ["content_details"] },
+      this.maxPages,
+    );
+    const items = page.items.flatMap((item) => {
+      const parsed = ModuleItemSchema.safeParse(item);
+      if (!parsed.success) return [];
+      const moduleItem = parsed.data;
+      return [{
+        id: moduleItem.id,
+        moduleId: moduleItem.module_id,
+        position: moduleItem.position ?? null,
+        title: moduleItem.title,
+        type: moduleItem.type,
+        contentId: moduleItem.content_id ?? null,
+        launchUrl: this.client.trustedWebUrl(moduleItem.html_url),
+      }];
+    });
+    items.sort((left, right) => Number(left.position ?? Number.MAX_SAFE_INTEGER) - Number(right.position ?? Number.MAX_SAFE_INTEGER));
+    return envelope({ courseId, moduleId, items, truncated: page.truncated });
   }
 
   async getAssignmentContext(courseId: string, assignmentId: string): Promise<Record<string, unknown>> {

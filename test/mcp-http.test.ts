@@ -40,6 +40,7 @@ describe("MCP server", () => {
       "get_upcoming_tasks",
       "get_announcements",
       "get_course_modules",
+      "get_course_module_items",
       "get_assignment_context",
     ]);
     expect(tools.tools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(true);

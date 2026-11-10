@@ -92,6 +92,7 @@ npm run dev
 - `get_upcoming_tasks`: 최대 31일 범위의 예정 과제 조회
 - `get_announcements`: 최근 과목 공지 조회
 - `get_course_modules`: 과목별 학습 모듈 조회
+- `get_course_module_items`: 모듈별 과제·외부 학습자료 항목과 Canvas 실행 링크 조회
 - `get_assignment_context`: 과제 설명, 마감일, 제출 상태 조회
 
 모든 도구는 읽기 전용입니다. 성적, 점수, 이메일, 로그인 ID와 액세스 토큰은 결과에 포함하지 않습니다. Canvas가 반환한 설명과 공지는 HTML을 제거하고 `untrustedContent: true`로 표시합니다.
@@ -124,7 +125,7 @@ npm run smoke:mcp
 일회성 API 감사는 별도 프로필로 실행합니다.
 
 ```bash
-docker compose --profile audit run --rm canvas-audit
+docker compose --profile audit run --rm --user "$(id -u):$(id -g)" canvas-audit
 ```
 
 ## TypeScript 설정의 역할
@@ -133,7 +134,7 @@ docker compose --profile audit run --rm canvas-audit
 
 ## 다음 단계
 
-다음 단계는 홈서버의 로컬 MCP 주소 앞에 인증 가능한 HTTPS 터널을 구성하고, 실제 외부 엔드포인트가 확정되면 `plugin.json`과 `mcp.json`을 포함한 비공개 CollegeHelper 플러그인 패키지를 생성하는 것입니다. API 감사에서 파일은 `401`, 페이지는 `404`였으므로 해당 기능은 권한이나 학교별 API 동작이 확인될 때까지 제공하지 않습니다.
+현재 홈서버 MCP는 OpenAI Secure MCP Tunnel을 통해 비공개 CollegeHelper 플러그인에 연결됩니다. API 감사에서 모듈 항목은 지원되었지만, 학습자료 44개는 모두 Canvas `File`이 아닌 HY-ON의 `ExternalTool` 항목이었습니다. 과목 파일 목록은 `401`, 페이지 목록은 `404`였으므로 CollegeHelper는 모듈 항목과 안전한 Canvas 실행 링크까지만 제공하며 외부 학습도구 본문이나 파일을 자동 다운로드하지 않습니다.
 
 CollegeHelper는 공개 인바운드 주소 대신 OpenAI Secure MCP Tunnel을 사용합니다. Platform에서 `tunnel_id`와 `Tunnels Read + Use` 권한의 Runtime API key를 만든 뒤 홈서버에서 다음 스크립트를 실행합니다.
 
