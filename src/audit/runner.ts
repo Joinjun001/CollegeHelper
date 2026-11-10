@@ -403,6 +403,38 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
         };
       },
     },
+    {
+      id: "A16",
+      name: "강의자료실 LTI 로그인 응답",
+      path: "sessionless_launch.form",
+      execute: async (context) => {
+        const values: unknown[] = [];
+        const statusCounts = new Map<string, number>();
+        const contentTypeCounts = new Map<string, number>();
+        const redirectHostCounts = new Map<string, number>();
+        let cookieResponseCount = 0;
+        for (const launchUrl of context.learningResourceLaunchUrls) {
+          const inspection = await client.inspectLtiFormSubmission(launchUrl);
+          values.push(inspection);
+          incrementCount(statusCounts, String(inspection.httpStatus));
+          incrementCount(contentTypeCounts, inspection.contentType || "unknown");
+          if (inspection.redirectHost) incrementCount(redirectHostCounts, inspection.redirectHost);
+          if (inspection.setsCookie) cookieResponseCount += 1;
+        }
+        const notes: string[] = [];
+        if (context.learningResourceLaunchUrls.length === 0) notes.push("제출할 LTI 로그인 폼이 없어 호출하지 않았습니다.");
+        if (statusCounts.size > 0) notes.push(`HTTP 상태 수: ${renderCounts(statusCounts)}`);
+        if (contentTypeCounts.size > 0) notes.push(`콘텐츠 유형 수: ${renderCounts(contentTypeCounts)}`);
+        if (redirectHostCounts.size > 0) notes.push(`리다이렉트 호스트 수: ${renderCounts(redirectHostCounts)}`);
+        notes.push(`쿠키 설정 응답 수: ${cookieResponseCount}`);
+        return {
+          values,
+          pagination: false,
+          called: context.learningResourceLaunchUrls.length > 0,
+          ...(notes.length > 0 ? { notes } : {}),
+        };
+      },
+    },
   ];
 }
 

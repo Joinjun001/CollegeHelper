@@ -26,6 +26,13 @@ export interface SessionlessLaunchInspection {
   formMethod: string | null;
 }
 
+export interface LtiFormSubmissionInspection {
+  httpStatus: number;
+  contentType: string;
+  redirectHost: string | null;
+  setsCookie: boolean;
+}
+
 interface JsonResponse<T> {
   data: T;
   headers: Headers;
@@ -108,6 +115,53 @@ export class CanvasClient {
       await response.body?.cancel();
     }
     return { httpStatus: response.status, contentType, redirectHost, formActionHost, formMethod };
+  }
+
+  async inspectLtiFormSubmission(value: string): Promise<LtiFormSubmissionInspection> {
+    const launchUrl = new URL(value, this.baseUrl);
+    if (launchUrl.protocol !== "https:" || launchUrl.origin !== this.baseUrl.origin) {
+      throw new CanvasError("INVALID_RESPONSE", "외부도구 실행 URL이 허용된 Canvas 호스트가 아닙니다.");
+    }
+    const launchResponse = await this.fetchImpl(launchUrl, {
+      method: "GET",
+      headers: { Accept: "text/html,application/xhtml+xml" },
+      redirect: "manual",
+    });
+    const html = await readLimitedText(launchResponse, 1_048_576);
+    const formTag = /<form\b[^>]*>/i.exec(html)?.[0];
+    if (!formTag) throw new CanvasError("INVALID_RESPONSE", "외부도구 실행 폼을 찾을 수 없습니다.");
+    const method = /\bmethod\s*=\s*["']([^"']+)["']/i.exec(formTag)?.[1]?.toUpperCase() ?? "GET";
+    const actionValue = /\baction\s*=\s*["']([^"']+)["']/i.exec(formTag)?.[1];
+    if (method !== "POST" || !actionValue) throw new CanvasError("INVALID_RESPONSE", "외부도구 실행 폼이 허용된 POST 형식이 아닙니다.");
+    const actionUrl = new URL(decodeHtmlAttribute(actionValue), launchUrl);
+    if (actionUrl.protocol !== "https:" || actionUrl.origin !== this.baseUrl.origin) {
+      throw new CanvasError("INVALID_RESPONSE", "외부도구 실행 폼 대상이 허용된 Canvas 호스트가 아닙니다.");
+    }
+    const body = new URLSearchParams();
+    for (const match of html.matchAll(/<input\b[^>]*>/gi)) {
+      const tag = match[0];
+      const name = /\bname\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
+      if (!name) continue;
+      const inputType = /\btype\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1]?.toLowerCase() ?? "text";
+      if (inputType !== "hidden") continue;
+      const inputValue = /\bvalue\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1] ?? "";
+      body.append(decodeHtmlAttribute(name), decodeHtmlAttribute(inputValue));
+    }
+    if ([...body.keys()].length === 0) throw new CanvasError("INVALID_RESPONSE", "외부도구 실행 폼에 인증 필드가 없습니다.");
+    const response = await this.fetchImpl(actionUrl, {
+      method: "POST",
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+      redirect: "manual",
+    });
+    const contentType = (response.headers.get("content-type") ?? "").split(";", 1)[0]?.trim().toLowerCase() ?? "";
+    const redirectHost = safeHttpsHostname(response.headers.get("location"), actionUrl);
+    const setsCookie = response.headers.has("set-cookie");
+    await response.body?.cancel();
+    return { httpStatus: response.status, contentType, redirectHost, setsCookie };
   }
 
   async getAllPages<T>(path: string, query: Query = {}, maxPages = 10): Promise<CanvasPage<T>> {
@@ -236,6 +290,16 @@ function safeHttpsHostname(value: string | null, baseUrl: URL): string | null {
   } catch {
     return null;
   }
+}
+
+function decodeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)));
 }
 
 async function readLimitedText(response: Response, maxBytes: number): Promise<string> {

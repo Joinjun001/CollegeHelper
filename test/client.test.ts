@@ -72,4 +72,32 @@ describe("CanvasClient", () => {
     const headers = new Headers(fetchImpl.mock.calls[0]?.[1]?.headers);
     expect(headers.has("authorization")).toBe(false);
   });
+
+  it("동일 호스트의 sessionless LTI 로그인 폼만 제출한다", async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(
+        '<html><form method="post" action="https://canvas.example.edu/lti/login"><input type="hidden" name="signed" value="a&amp;b"></form></html>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      ))
+      .mockResolvedValueOnce(new Response(null, {
+        status: 302,
+        headers: { location: "https://canvas.example.edu/learning/resources", "set-cookie": "session=fake; Secure" },
+      }));
+    const client = new CanvasClient({ baseUrl: "https://canvas.example.edu", accessToken: "secret", timeoutMs: 1_000, fetchImpl });
+
+    await expect(client.inspectLtiFormSubmission("https://canvas.example.edu/sessionless/launch?id=1")).resolves.toEqual({
+      httpStatus: 302,
+      contentType: "",
+      redirectHost: "canvas.example.edu",
+      setsCookie: true,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const post = fetchImpl.mock.calls[1];
+    expect(post?.[1]?.method).toBe("POST");
+    const postBody = post?.[1]?.body;
+    expect(postBody).toBeInstanceOf(URLSearchParams);
+    if (!(postBody instanceof URLSearchParams)) throw new Error("Expected URLSearchParams body");
+    expect(postBody.toString()).toBe("signed=a%26b");
+    expect(new Headers(post?.[1]?.headers).has("authorization")).toBe(false);
+  });
 });
