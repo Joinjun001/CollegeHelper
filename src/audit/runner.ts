@@ -374,16 +374,32 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
       path: "sessionless_launch.url",
       execute: async (context) => {
         const values: unknown[] = [];
+        const statusCounts = new Map<string, number>();
+        const contentTypeCounts = new Map<string, number>();
+        const formMethodCounts = new Map<string, number>();
+        const formActionHostCounts = new Map<string, number>();
+        const redirectHostCounts = new Map<string, number>();
         for (const launchUrl of context.learningResourceLaunchUrls) {
-          values.push(await client.inspectSessionlessLaunch(launchUrl));
+          const inspection = await client.inspectSessionlessLaunch(launchUrl);
+          values.push(inspection);
+          incrementCount(statusCounts, String(inspection.httpStatus));
+          incrementCount(contentTypeCounts, inspection.contentType || "unknown");
+          if (inspection.formMethod) incrementCount(formMethodCounts, inspection.formMethod);
+          if (inspection.formActionHost) incrementCount(formActionHostCounts, inspection.formActionHost);
+          if (inspection.redirectHost) incrementCount(redirectHostCounts, inspection.redirectHost);
         }
+        const notes: string[] = [];
+        if (context.learningResourceLaunchUrls.length === 0) notes.push("확인할 sessionless launch URL이 없어 호출하지 않았습니다.");
+        if (statusCounts.size > 0) notes.push(`HTTP 상태 수: ${renderCounts(statusCounts)}`);
+        if (contentTypeCounts.size > 0) notes.push(`콘텐츠 유형 수: ${renderCounts(contentTypeCounts)}`);
+        if (formMethodCounts.size > 0) notes.push(`HTML 폼 방식 수: ${renderCounts(formMethodCounts)}`);
+        if (formActionHostCounts.size > 0) notes.push(`HTML 폼 대상 호스트 수: ${renderCounts(formActionHostCounts)}`);
+        if (redirectHostCounts.size > 0) notes.push(`리다이렉트 호스트 수: ${renderCounts(redirectHostCounts)}`);
         return {
           values,
           pagination: false,
           called: context.learningResourceLaunchUrls.length > 0,
-          ...(context.learningResourceLaunchUrls.length === 0
-            ? { notes: ["확인할 sessionless launch URL이 없어 호출하지 않았습니다."] }
-            : {}),
+          ...(notes.length > 0 ? { notes } : {}),
         };
       },
     },
@@ -434,4 +450,15 @@ function asId(value: unknown): string | undefined {
 
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function incrementCount(counts: Map<string, number>, value: string): void {
+  counts.set(value, (counts.get(value) ?? 0) + 1);
+}
+
+function renderCounts(counts: Map<string, number>): string {
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([value, count]) => `${value}=${count}`)
+    .join(", ");
 }
