@@ -9,6 +9,8 @@ interface NetworkObservation {
   resourceType: string;
   count: number;
   statuses: Set<number>;
+  contentTypes: Set<string>;
+  contentDispositionCount: number;
 }
 
 interface CourseTarget {
@@ -173,6 +175,8 @@ async function main(): Promise<void> {
         resourceType: item.resourceType,
         count: item.count,
         statuses: [...item.statuses].sort((left, right) => left - right),
+        contentTypes: [...item.contentTypes].sort(),
+        contentDispositionCount: item.contentDispositionCount,
       })),
     resourceResponseShapes: resourceShapes,
     viewUrlInspections,
@@ -192,6 +196,8 @@ function recordRequest(observations: Map<string, NetworkObservation>, request: R
     resourceType: request.resourceType(),
     count: 0,
     statuses: new Set<number>(),
+    contentTypes: new Set<string>(),
+    contentDispositionCount: 0,
   };
   current.count += 1;
   observations.set(key, current);
@@ -204,7 +210,13 @@ function recordResponse(observations: Map<string, NetworkObservation>, response:
   const path = sanitizeNetworkPath(url.pathname);
   const key = `${request.method()} ${path} ${request.resourceType()}`;
   const current = observations.get(key);
-  if (current) current.statuses.add(response.status());
+  if (current) {
+    current.statuses.add(response.status());
+    const headers = response.headers();
+    const contentType = (headers["content-type"] ?? "").split(";", 1)[0]?.trim().toLowerCase();
+    if (contentType) current.contentTypes.add(contentType);
+    if (typeof headers["content-disposition"] === "string") current.contentDispositionCount += 1;
+  }
 }
 
 function safeSameOriginUrl(value: string, baseOrigin: string): URL | null {
@@ -221,7 +233,7 @@ function sanitizeNetworkPath(pathname: string): string {
     if (!segment) return segment;
     if (/^\d+$/.test(segment)) return ":id";
     if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(segment)) return ":uuid";
-    if (/^[0-9a-f]{16,}$/i.test(segment)) return ":token";
+    if (/^[0-9a-f]{8,}$/i.test(segment)) return ":token";
     if (segment.includes("%") || !/^[A-Za-z0-9._-]+$/.test(segment) || segment.length > 48) return ":value";
     return segment;
   });
