@@ -88,6 +88,7 @@ async function main(): Promise<void> {
   const resourceViewUrls: string[] = [];
   const viewUrlInspections: ViewUrlInspection[] = [];
   const domUrlPatterns = new Set<string>();
+  const externalDomUrlPatterns = new Set<string>();
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   try {
     for (const target of targets) {
@@ -122,17 +123,21 @@ async function main(): Promise<void> {
         await page.getByText(resourceInspection.firstTitle, { exact: true }).first().click({ noWaitAfter: true, timeout: 5_000 }).catch(() => undefined);
         await page.waitForTimeout(3_000);
       }
-      const domUrls = await page.locator("[href], [src], [data-url], [data-href], [data-file-url]").evaluateAll((elements) =>
-        elements.flatMap((element) => ["href", "src", "data-url", "data-href", "data-file-url"]
+      const domUrls = await page.locator("[href], [src], object[data], embed[src], [data-url], [data-href], [data-file-url]").evaluateAll((elements) =>
+        elements.flatMap((element) => ["href", "src", "data", "data-url", "data-href", "data-file-url"]
           .map((attribute) => element.getAttribute(attribute))
           .filter((value): value is string => typeof value === "string" && value.length > 0)),
       );
       for (const value of domUrls) {
         try {
           const url = new URL(value, baseOrigin);
-          if (url.protocol !== "https:" || url.origin !== baseOrigin) continue;
+          if (url.protocol !== "https:") continue;
           const pattern = sanitizeNetworkPath(url.pathname);
-          if (/(file|resource|download|content|attach|viewer|preview)/i.test(pattern)) domUrlPatterns.add(pattern);
+          if (url.origin === baseOrigin) {
+            if (/(file|resource|download|content|attach|viewer|preview)/i.test(pattern)) domUrlPatterns.add(pattern);
+          } else if (externalDomUrlPatterns.size < 50) {
+            externalDomUrlPatterns.add(`${url.hostname.toLowerCase()}${pattern}`);
+          }
         } catch {
           // Invalid DOM URLs are ignored; raw values are never recorded.
         }
@@ -181,6 +186,7 @@ async function main(): Promise<void> {
     resourceResponseShapes: resourceShapes,
     viewUrlInspections,
     domUrlPatterns: [...domUrlPatterns].sort(),
+    externalDomUrlPatterns: [...externalDomUrlPatterns].sort(),
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
