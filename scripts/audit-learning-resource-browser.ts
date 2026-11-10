@@ -60,6 +60,10 @@ interface RenderedPageShape {
   srcdocCount: number;
 }
 
+interface FrameShape extends RenderedPageShape {
+  urlPattern: string;
+}
+
 async function main(): Promise<void> {
   const config = loadConfig();
   const client = new CanvasClient({
@@ -103,6 +107,7 @@ async function main(): Promise<void> {
   let blobUrlCount = 0;
   const dataUrlMimeTypes = new Set<string>();
   const renderedPageShapes: RenderedPageShape[] = [];
+  const frameShapes: FrameShape[] = [];
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   try {
     for (const target of targets) {
@@ -145,6 +150,26 @@ async function main(): Promise<void> {
           iframeCount: await page.locator("iframe").count(),
           srcdocCount: await page.locator("[srcdoc]").count(),
         });
+        for (const frame of page.frames()) {
+          let urlPattern = "non-https";
+          try {
+            const frameUrl = new URL(frame.url());
+            if (frameUrl.protocol === "https:") urlPattern = `${frameUrl.hostname.toLowerCase()}${sanitizeNetworkPath(frameUrl.pathname)}`;
+            else urlPattern = frameUrl.protocol;
+          } catch {
+            urlPattern = "invalid";
+          }
+          frameShapes.push({
+            urlPattern,
+            textLength: (await frame.locator("body").innerText().catch(() => "")).length,
+            canvasCount: await frame.locator("canvas").count(),
+            imageCount: await frame.locator("img").count(),
+            embedCount: await frame.locator("embed").count(),
+            objectCount: await frame.locator("object").count(),
+            iframeCount: await frame.locator("iframe").count(),
+            srcdocCount: await frame.locator("[srcdoc]").count(),
+          });
+        }
       }
       const domUrls = await page.locator("[href], [src], object[data], embed[src], [data-url], [data-href], [data-file-url]").evaluateAll((elements) =>
         elements.flatMap((element) => ["href", "src", "data", "data-url", "data-href", "data-file-url"]
@@ -224,6 +249,7 @@ async function main(): Promise<void> {
     blobUrlCount,
     dataUrlMimeTypes: [...dataUrlMimeTypes].sort(),
     renderedPageShapes,
+    frameShapes,
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
