@@ -50,6 +50,16 @@ interface ViewUrlInspection {
   finalPath: string;
 }
 
+interface RenderedPageShape {
+  textLength: number;
+  canvasCount: number;
+  imageCount: number;
+  embedCount: number;
+  objectCount: number;
+  iframeCount: number;
+  srcdocCount: number;
+}
+
 async function main(): Promise<void> {
   const config = loadConfig();
   const client = new CanvasClient({
@@ -92,6 +102,7 @@ async function main(): Promise<void> {
   let dataUrlCount = 0;
   let blobUrlCount = 0;
   const dataUrlMimeTypes = new Set<string>();
+  const renderedPageShapes: RenderedPageShape[] = [];
   const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   try {
     for (const target of targets) {
@@ -125,6 +136,15 @@ async function main(): Promise<void> {
         });
         await page.getByText(resourceInspection.firstTitle, { exact: true }).first().click({ noWaitAfter: true, timeout: 5_000 }).catch(() => undefined);
         await page.waitForTimeout(3_000);
+        renderedPageShapes.push({
+          textLength: (await page.locator("body").innerText().catch(() => "")).length,
+          canvasCount: await page.locator("canvas").count(),
+          imageCount: await page.locator("img").count(),
+          embedCount: await page.locator("embed").count(),
+          objectCount: await page.locator("object").count(),
+          iframeCount: await page.locator("iframe").count(),
+          srcdocCount: await page.locator("[srcdoc]").count(),
+        });
       }
       const domUrls = await page.locator("[href], [src], object[data], embed[src], [data-url], [data-href], [data-file-url]").evaluateAll((elements) =>
         elements.flatMap((element) => ["href", "src", "data", "data-url", "data-href", "data-file-url"]
@@ -203,6 +223,7 @@ async function main(): Promise<void> {
     dataUrlCount,
     blobUrlCount,
     dataUrlMimeTypes: [...dataUrlMimeTypes].sort(),
+    renderedPageShapes,
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
