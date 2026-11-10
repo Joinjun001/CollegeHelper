@@ -143,4 +143,16 @@ CollegeHelper는 공개 인바운드 주소 대신 OpenAI Secure MCP Tunnel을 �
 
 키는 `/home/injun/apps/tunnel-client/secrets/runtime.key`에 권한 `600`으로 저장되고 명령 인자나 Git 저장소에는 들어가지 않습니다.
 
+설정 후에는 사용자 서비스로 터널을 실행할 수 있습니다.
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp deploy/college-helper-tunnel.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now college-helper-tunnel.service
+```
+
+SSH 세션이 없는 동안과 재부팅 후에도 사용자 서비스를 유지하려면 서버 관리자가
+한 번만 `sudo loginctl enable-linger "$USER"`를 실행해야 합니다.
+
 작동하지 않는 임시 MCP 주소를 저장소에 넣지 않습니다. 자세한 기준은 [개발 제안서](./CollegeHelper_개발_제안서.md)를 따릅니다.

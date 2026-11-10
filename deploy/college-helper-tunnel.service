@@ -1,0 +1,17 @@
+[Unit]
+Description=CollegeHelper OpenAI Secure MCP Tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/apps/tunnel-client
+ExecStart=%h/apps/tunnel-client/current/tunnel-client run --profile college-helper
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
