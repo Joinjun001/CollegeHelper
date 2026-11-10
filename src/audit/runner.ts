@@ -9,6 +9,7 @@ interface AuditContext {
   assignmentIds: Map<string, string>;
   moduleIds: Map<string, string[]>;
   moduleFileIds: string[];
+  learningResourceToolIds: Map<string, string[]>;
 }
 
 interface Observation {
@@ -40,6 +41,7 @@ export async function runCanvasAudit(client: CanvasClient, options: AuditRunnerO
     assignmentIds: new Map(),
     moduleIds: new Map(),
     moduleFileIds: [],
+    learningResourceToolIds: new Map(),
   };
   const definitions = createDefinitions(client, options);
   const results: AuditResult[] = [];
@@ -273,6 +275,94 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
       execute: async () => {
         const page = await list("/api/v1/users/self/history");
         return { values: page.items, pagination: page.hadLinkHeader || page.pageCount > 1, called: true, ...(page.truncated ? { notes: ["페이지 상한에 도달해 결과가 일부일 수 있습니다."] } : {}) };
+      },
+    },
+    {
+      id: "A13",
+      name: "과목 내비게이션 탭",
+      path: "/api/v1/courses/:course_id/tabs",
+      execute: async (context) => {
+        const values: unknown[] = [];
+        const typeCounts = new Map<string, number>();
+        let learningResourceTabCount = 0;
+        let pagination = false;
+        let truncated = false;
+        for (const courseId of context.courseIds.slice(0, options.maxCourses)) {
+          const page = await list(`/api/v1/courses/${encodeURIComponent(courseId)}/tabs`);
+          values.push(...page.items);
+          pagination ||= page.hadLinkHeader || page.pageCount > 1;
+          truncated ||= page.truncated;
+          const toolIds: string[] = [];
+          for (const tab of page.items) {
+            if (typeof tab.type === "string") typeCounts.set(tab.type, (typeCounts.get(tab.type) ?? 0) + 1);
+            if (tab.label !== "강의자료실" || typeof tab.id !== "string") continue;
+            const match = /^context_external_tool_(\d+)$/.exec(tab.id);
+            if (!match?.[1]) continue;
+            learningResourceTabCount += 1;
+            toolIds.push(match[1]);
+          }
+          if (toolIds.length > 0) context.learningResourceToolIds.set(courseId, toolIds);
+        }
+        const notes: string[] = [];
+        if (typeCounts.size > 0) {
+          const summary = [...typeCounts.entries()]
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([type, count]) => `${type}=${count}`)
+            .join(", ");
+          notes.push(`탭 유형 수: ${summary}`);
+        }
+        notes.push(`강의자료실 외부도구 탭 수: ${learningResourceTabCount}`);
+        if (truncated) notes.push("페이지 상한에 도달해 결과가 일부일 수 있습니다.");
+        return {
+          values,
+          pagination,
+          called: context.courseIds.length > 0,
+          ...(notes.length > 0 ? { notes } : {}),
+        };
+      },
+    },
+    {
+      id: "A14",
+      name: "강의자료실 외부도구 실행",
+      path: "/api/v1/courses/:course_id/external_tools/sessionless_launch",
+      execute: async (context) => {
+        const values: unknown[] = [];
+        const launchHostCounts = new Map<string, number>();
+        let targetCount = 0;
+        for (const [courseId, toolIds] of context.learningResourceToolIds) {
+          for (const toolId of toolIds) {
+            targetCount += 1;
+            const value = await client.getJson<JsonObject>(
+              `/api/v1/courses/${encodeURIComponent(courseId)}/external_tools/sessionless_launch`,
+              { id: toolId, launch_type: "course_navigation" },
+            );
+            values.push(value);
+            if (typeof value.url !== "string") continue;
+            try {
+              const url = new URL(value.url);
+              if (url.protocol !== "https:") continue;
+              const hostname = url.hostname.toLowerCase();
+              launchHostCounts.set(hostname, (launchHostCounts.get(hostname) ?? 0) + 1);
+            } catch {
+              // Raw launch URLs are never recorded.
+            }
+          }
+        }
+        const notes: string[] = [];
+        if (targetCount === 0) notes.push("강의자료실 외부도구 탭을 찾지 못해 호출하지 않았습니다.");
+        if (launchHostCounts.size > 0) {
+          const summary = [...launchHostCounts.entries()]
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([hostname, count]) => `${hostname}=${count}`)
+            .join(", ");
+          notes.push(`실행 URL 호스트 수: ${summary}`);
+        }
+        return {
+          values,
+          pagination: false,
+          called: targetCount > 0,
+          ...(notes.length > 0 ? { notes } : {}),
+        };
       },
     },
   ];
