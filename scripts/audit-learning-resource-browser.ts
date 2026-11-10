@@ -22,9 +22,15 @@ interface JsonArrayShape {
   itemFields: string[];
 }
 
+interface JsonObjectShape {
+  path: string;
+  fields: string[];
+}
+
 interface ResourceResponseShape {
   topLevelFields: string[];
   arrays: JsonArrayShape[];
+  objects: JsonObjectShape[];
 }
 
 async function main(): Promise<void> {
@@ -175,6 +181,7 @@ async function inspectResourceResponse(response: Response): Promise<ResourceResp
     return {
       topLevelFields: isRecord(value) ? Object.keys(value).sort().slice(0, 100) : [],
       arrays: collectArrayShapes(value),
+      objects: collectObjectShapes(value),
     };
   } catch {
     return null;
@@ -197,6 +204,18 @@ function collectArrayShapes(value: unknown, path = "$", depth = 0): JsonArraySha
   }
   if (!isRecord(value)) return [];
   return Object.entries(value).flatMap(([key, child]) => collectArrayShapes(child, `${path}.${key}`, depth + 1));
+}
+
+function collectObjectShapes(value: unknown, path = "$", depth = 0): JsonObjectShape[] {
+  if (depth > 4) return [];
+  if (Array.isArray(value)) {
+    const firstObject = value.find(isRecord);
+    return firstObject ? collectObjectShapes(firstObject, `${path}[]`, depth + 1) : [];
+  }
+  if (!isRecord(value)) return [];
+  const current: JsonObjectShape = { path, fields: Object.keys(value).sort().slice(0, 100) };
+  const nested = Object.entries(value).flatMap(([key, child]) => collectObjectShapes(child, `${path}.${key}`, depth + 1));
+  return [current, ...nested];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
