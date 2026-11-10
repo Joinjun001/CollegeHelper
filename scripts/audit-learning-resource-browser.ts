@@ -98,6 +98,7 @@ async function main(): Promise<void> {
 
   const baseOrigin = new URL(config.canvasBaseUrl).origin;
   const observations = new Map<string, NetworkObservation>();
+  const externalObservations = new Map<string, NetworkObservation>();
   const resourceShapes: ResourceResponseShape[] = [];
   const resourceViewUrls: string[] = [];
   const viewUrlInspections: ViewUrlInspection[] = [];
@@ -121,7 +122,11 @@ async function main(): Promise<void> {
       const context = await browser.newContext({ serviceWorkers: "block" });
       const page = await context.newPage();
       page.on("request", (request) => recordRequest(observations, request, baseOrigin));
-      page.on("response", (response) => recordResponse(observations, response, baseOrigin));
+      page.on("request", (request) => recordExternalRequest(externalObservations, request, baseOrigin));
+      page.on("response", (response) => {
+        recordResponse(observations, response, baseOrigin);
+        recordExternalResponse(externalObservations, response, baseOrigin);
+      });
       const resourceResponsePromise = page.waitForResponse((response) => {
         const url = safeSameOriginUrl(response.url(), baseOrigin);
         return url?.pathname.endsWith("/resources_db") === true && response.status() === 200;
@@ -241,6 +246,19 @@ async function main(): Promise<void> {
         contentTypes: [...item.contentTypes].sort(),
         contentDispositionCount: item.contentDispositionCount,
       })),
+    externalRequests: [...externalObservations.values()]
+      .filter((item) => ["document", "xhr", "fetch", "image", "media", "other"].includes(item.resourceType))
+      .sort((left, right) => `${left.method} ${left.path}`.localeCompare(`${right.method} ${right.path}`))
+      .slice(0, 100)
+      .map((item) => ({
+        method: item.method,
+        path: item.path,
+        resourceType: item.resourceType,
+        count: item.count,
+        statuses: [...item.statuses].sort((left, right) => left - right),
+        contentTypes: [...item.contentTypes].sort(),
+        contentDispositionCount: item.contentDispositionCount,
+      })),
     resourceResponseShapes: resourceShapes,
     viewUrlInspections,
     domUrlPatterns: [...domUrlPatterns].sort(),
@@ -288,10 +306,52 @@ function recordResponse(observations: Map<string, NetworkObservation>, response:
   }
 }
 
+function recordExternalRequest(observations: Map<string, NetworkObservation>, request: Request, baseOrigin: string): void {
+  const url = safeHttpsUrl(request.url());
+  if (!url || url.origin === baseOrigin) return;
+  const path = `${url.hostname.toLowerCase()}${sanitizeNetworkPath(url.pathname)}`;
+  const key = `${request.method()} ${path} ${request.resourceType()}`;
+  const current = observations.get(key) ?? {
+    method: request.method(),
+    path,
+    resourceType: request.resourceType(),
+    count: 0,
+    statuses: new Set<number>(),
+    contentTypes: new Set<string>(),
+    contentDispositionCount: 0,
+  };
+  current.count += 1;
+  observations.set(key, current);
+}
+
+function recordExternalResponse(observations: Map<string, NetworkObservation>, response: Response, baseOrigin: string): void {
+  const request = response.request();
+  const url = safeHttpsUrl(request.url());
+  if (!url || url.origin === baseOrigin) return;
+  const path = `${url.hostname.toLowerCase()}${sanitizeNetworkPath(url.pathname)}`;
+  const key = `${request.method()} ${path} ${request.resourceType()}`;
+  const current = observations.get(key);
+  if (!current) return;
+  current.statuses.add(response.status());
+  const headers = response.headers();
+  const contentType = (headers["content-type"] ?? "").split(";", 1)[0]?.trim().toLowerCase();
+  if (contentType) current.contentTypes.add(contentType);
+  if (typeof headers["content-disposition"] === "string") current.contentDispositionCount += 1;
+}
+
 function safeSameOriginUrl(value: string, baseOrigin: string): URL | null {
   try {
     const url = new URL(value);
     return url.protocol === "https:" && url.origin === baseOrigin ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeHttpsUrl(value: string): URL | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url : null;
   } catch {
     return null;
   }
