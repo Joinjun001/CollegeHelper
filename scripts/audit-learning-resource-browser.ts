@@ -25,6 +25,7 @@ interface JsonArrayShape {
 interface JsonObjectShape {
   path: string;
   fields: string[];
+  fieldTypes: Record<string, string>;
 }
 
 interface ResourceResponseShape {
@@ -261,13 +262,24 @@ function collectObjectShapes(value: unknown, path = "$", depth = 0): JsonObjectS
     return firstObject ? collectObjectShapes(firstObject, `${path}[]`, depth + 1) : [];
   }
   if (!isRecord(value)) return [];
-  const current: JsonObjectShape = { path, fields: Object.keys(value).sort().slice(0, 100) };
+  const fields = Object.keys(value).sort().slice(0, 100);
+  const current: JsonObjectShape = {
+    path,
+    fields,
+    fieldTypes: Object.fromEntries(fields.map((field) => [field, jsonType(value[field])])),
+  };
   const nested = Object.entries(value).flatMap(([key, child]) => collectObjectShapes(child, `${path}.${key}`, depth + 1));
   return [current, ...nested];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function jsonType(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
 }
 
 main().catch(() => {
