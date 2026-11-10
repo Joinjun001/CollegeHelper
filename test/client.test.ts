@@ -54,4 +54,22 @@ describe("CanvasClient", () => {
     await expect(client.getJson("/api/v1/courses/1")).resolves.toEqual({ id: 1 });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
+
+  it("sessionless launch HTML에서 인증값 없이 안전한 전송 방식만 확인한다", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+      '<html><form method="post" action="https://tool.example.edu/lti/launch?signature=secret"><input name="token" value="hidden"></form></html>',
+      { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
+    ));
+    const client = new CanvasClient({ baseUrl: "https://canvas.example.edu", accessToken: "secret", timeoutMs: 1_000, fetchImpl });
+
+    await expect(client.inspectSessionlessLaunch("https://canvas.example.edu/sessionless/launch?id=1")).resolves.toEqual({
+      httpStatus: 200,
+      contentType: "text/html",
+      redirectHost: null,
+      formActionHost: "tool.example.edu",
+      formMethod: "POST",
+    });
+    const headers = new Headers(fetchImpl.mock.calls[0]?.[1]?.headers);
+    expect(headers.has("authorization")).toBe(false);
+  });
 });

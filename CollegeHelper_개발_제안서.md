@@ -203,6 +203,7 @@ HY-ON에서 현재 사용자 토큰으로 실제 접근 가능한 데이터, 응
 | A12 | 최근 활동 | `GET /api/v1/users/self/history` | 최근 접근한 Canvas 항목 |
 | A13 | 과목 내비게이션 탭 | `GET /api/v1/courses/:course_id/tabs` | 강의자료실 외부도구 탭 확인 |
 | A14 | 강의자료실 외부도구 실행 | `GET /api/v1/courses/:course_id/external_tools/sessionless_launch` | 공식 LTI 실행 URL 지원 여부 |
+| A15 | 강의자료실 실행 응답 | sessionless launch URL에 인증 헤더 없이 `GET` | LTI 실행에 필요한 응답 형식과 전송 방식 |
 
 후보 엔드포인트는 Canvas 문서상의 가능성을 의미하며, 실제 지원 여부는 감사 스크립트의 결과로 결정한다.
 

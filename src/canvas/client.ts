@@ -18,6 +18,14 @@ export interface CanvasPage<T> {
   truncated: boolean;
 }
 
+export interface SessionlessLaunchInspection {
+  httpStatus: number;
+  contentType: string;
+  redirectHost: string | null;
+  formActionHost: string | null;
+  formMethod: string | null;
+}
+
 interface JsonResponse<T> {
   data: T;
   headers: Headers;
@@ -57,6 +65,49 @@ export class CanvasClient {
     } catch {
       return null;
     }
+  }
+
+  async inspectSessionlessLaunch(value: string): Promise<SessionlessLaunchInspection> {
+    const url = new URL(value, this.baseUrl);
+    if (url.protocol !== "https:" || url.origin !== this.baseUrl.origin) {
+      throw new CanvasError("INVALID_RESPONSE", "외부도구 실행 URL이 허용된 Canvas 호스트가 아닙니다.");
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs);
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: "GET",
+        headers: { Accept: "text/html,application/xhtml+xml" },
+        redirect: "manual",
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new CanvasError("UPSTREAM_TIMEOUT", "외부도구 실행 URL 확인 시간이 초과되었습니다.");
+      }
+      throw new CanvasError("UPSTREAM_ERROR", "외부도구 실행 URL에 연결할 수 없습니다.");
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const contentType = (response.headers.get("content-type") ?? "").split(";", 1)[0]?.trim().toLowerCase() ?? "";
+    const location = response.headers.get("location");
+    const redirectHost = safeHttpsHostname(location, url);
+    let formActionHost: string | null = null;
+    let formMethod: string | null = null;
+    if (contentType === "text/html" || contentType === "application/xhtml+xml") {
+      const html = await readLimitedText(response, 1_048_576);
+      const formTag = /<form\b[^>]*>/i.exec(html)?.[0];
+      if (formTag) {
+        const action = /\baction\s*=\s*["']([^"']+)["']/i.exec(formTag)?.[1];
+        formActionHost = safeHttpsHostname(action ?? null, url);
+        formMethod = /\bmethod\s*=\s*["']([^"']+)["']/i.exec(formTag)?.[1]?.toUpperCase() ?? "GET";
+      }
+    } else {
+      await response.body?.cancel();
+    }
+    return { httpStatus: response.status, contentType, redirectHost, formActionHost, formMethod };
   }
 
   async getAllPages<T>(path: string, query: Query = {}, maxPages = 10): Promise<CanvasPage<T>> {
@@ -175,4 +226,35 @@ function retryAfterMilliseconds(value: string | null): number {
 
 async function wait(milliseconds: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function safeHttpsHostname(value: string | null, baseUrl: URL): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value, baseUrl);
+    return url.protocol === "https:" ? url.hostname.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readLimitedText(response: Response, maxBytes: number): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let totalBytes = 0;
+  let result = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      totalBytes += chunk.value.byteLength;
+      if (totalBytes > maxBytes) throw new CanvasError("INVALID_RESPONSE", "외부도구 실행 응답이 허용된 크기를 초과했습니다.");
+      result += decoder.decode(chunk.value, { stream: true });
+    }
+    result += decoder.decode();
+    return result;
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
 }

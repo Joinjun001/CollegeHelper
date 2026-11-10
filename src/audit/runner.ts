@@ -10,6 +10,7 @@ interface AuditContext {
   moduleIds: Map<string, string[]>;
   moduleFileIds: string[];
   learningResourceToolIds: Map<string, string[]>;
+  learningResourceLaunchUrls: string[];
 }
 
 interface Observation {
@@ -42,6 +43,7 @@ export async function runCanvasAudit(client: CanvasClient, options: AuditRunnerO
     moduleIds: new Map(),
     moduleFileIds: [],
     learningResourceToolIds: new Map(),
+    learningResourceLaunchUrls: [],
   };
   const definitions = createDefinitions(client, options);
   const results: AuditResult[] = [];
@@ -343,6 +345,7 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
               if (url.protocol !== "https:") continue;
               const hostname = url.hostname.toLowerCase();
               launchHostCounts.set(hostname, (launchHostCounts.get(hostname) ?? 0) + 1);
+              if (!context.learningResourceLaunchUrls.includes(value.url)) context.learningResourceLaunchUrls.push(value.url);
             } catch {
               // Raw launch URLs are never recorded.
             }
@@ -362,6 +365,25 @@ function createDefinitions(client: CanvasClient, options: AuditRunnerOptions): E
           pagination: false,
           called: targetCount > 0,
           ...(notes.length > 0 ? { notes } : {}),
+        };
+      },
+    },
+    {
+      id: "A15",
+      name: "강의자료실 실행 응답 형식",
+      path: "sessionless_launch.url",
+      execute: async (context) => {
+        const values: unknown[] = [];
+        for (const launchUrl of context.learningResourceLaunchUrls) {
+          values.push(await client.inspectSessionlessLaunch(launchUrl));
+        }
+        return {
+          values,
+          pagination: false,
+          called: context.learningResourceLaunchUrls.length > 0,
+          ...(context.learningResourceLaunchUrls.length === 0
+            ? { notes: ["확인할 sessionless launch URL이 없어 호출하지 않았습니다."] }
+            : {}),
         };
       },
     },
