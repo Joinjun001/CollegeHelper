@@ -2,6 +2,7 @@ import { CanvasClient } from "./canvas/client.js";
 import { CanvasService } from "./canvas/service.js";
 import { loadConfig } from "./config.js";
 import { startHttpServer } from "./http-server.js";
+import { LearningResourceClient } from "./learning/client.js";
 
 const config = loadConfig();
 const client = new CanvasClient({
@@ -10,7 +11,8 @@ const client = new CanvasClient({
   timeoutMs: config.requestTimeoutMs,
 });
 const service = new CanvasService(client, config.auditMaxPages);
-const running = await startHttpServer(config, service);
+const learningResources = new LearningResourceClient(config.learningResourceWorkerUrl, config.requestTimeoutMs);
+const running = await startHttpServer(config, service, learningResources);
 
 process.stderr.write(`CollegeHelper MCP listening on http://${config.mcpHost}:${config.mcpPort}/mcp\n`);
 

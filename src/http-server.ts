@@ -5,6 +5,7 @@ import { createMcpHandler } from "@modelcontextprotocol/server";
 
 import type { AppConfig } from "./config.js";
 import type { CanvasService } from "./canvas/service.js";
+import type { LearningResourceClient } from "./learning/client.js";
 import { createCollegeHelperMcpServer } from "./mcp/server.js";
 
 export interface RunningServer {
@@ -12,8 +13,8 @@ export interface RunningServer {
   close: () => Promise<void>;
 }
 
-export async function startHttpServer(config: AppConfig, service: CanvasService): Promise<RunningServer> {
-  const mcpHandler = createMcpHandler(() => createCollegeHelperMcpServer(service), {
+export async function startHttpServer(config: AppConfig, service: CanvasService, learningResources?: LearningResourceClient): Promise<RunningServer> {
+  const mcpHandler = createMcpHandler(() => createCollegeHelperMcpServer(service, learningResources), {
     responseMode: "json",
     maxRequestBodySize: 1_048_576,
     onerror: (error) => process.stderr.write(`[mcp] ${error.message}\n`),

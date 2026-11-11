@@ -17,6 +17,36 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+    depends_on:
+      learning-resource-worker:
+        condition: service_healthy
+
+  learning-resource-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.browser-audit
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      LEARNING_RESOURCE_WORKER_PORT: 3200
+      LEARNING_RESOURCE_CACHE_DIR: /data
+    command: ["node", "dist/scripts/learning-resource-worker.js"]
+    volumes:
+      - learning-resource-cache:/data
+    ipc: host
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3200/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
 
   canvas-audit:
     build: .
@@ -54,3 +84,6 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: "no"
+
+volumes:
+  learning-resource-cache:

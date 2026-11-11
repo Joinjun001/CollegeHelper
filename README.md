@@ -2,7 +2,7 @@
 
 한양대학교 HY-ON(Canvas LMS)에서 개인 액세스 토큰으로 조회 가능한 읽기 API를 안전하게 조사하고, 이후 검증된 데이터만 MCP 도구로 제공하는 개인용 대학 생활 도우미 프로젝트입니다.
 
-현재 구현 범위는 **Phase 0~3(API 감사, Canvas 서비스 계층, 읽기 전용 MCP 서버)** 입니다. 감사에서 정상 작동이 확인된 API만 도구로 제공합니다.
+현재 구현 범위는 **Phase 0~4(API 감사, Canvas 서비스 계층, 읽기 전용 MCP 서버, 강의자료실 원본 PDF 캐시)** 입니다. 감사에서 정상 작동이 확인된 API만 도구로 제공합니다.
 
 ## 목표 사용 방식
 
@@ -94,8 +94,23 @@ npm run dev
 - `get_course_modules`: 과목별 학습 모듈 조회
 - `get_course_module_items`: 모듈별 과제·외부 학습자료 항목과 Canvas 실행 링크 조회
 - `get_assignment_context`: 과제 설명, 마감일, 제출 상태 조회
+- `list_course_learning_resources`: HY-ON 강의자료실의 자료 목록과 캐시 상태 조회
+- `get_learning_resource_text`: 원본 PDF를 자동 수집·텍스트화하고 필요한 구간 조회
 
-모든 도구는 읽기 전용입니다. 성적, 점수, 이메일, 로그인 ID와 액세스 토큰은 결과에 포함하지 않습니다. Canvas가 반환한 설명과 공지는 HTML을 제거하고 `untrustedContent: true`로 표시합니다.
+모든 도구는 LMS에 대해 읽기 전용입니다. 성적, 점수, 이메일, 로그인 ID와 액세스 토큰은 결과에 포함하지 않습니다. Canvas가 반환한 설명, 공지 및 강의자료 원문은 `untrustedContent: true`로 표시합니다.
+
+## 강의자료 자동 학습
+
+HY-ON의 `강의자료실`은 Canvas 기본 Files API가 아니라 외부 학습도구입니다. 비식별 감사로 다음 읽기 경로가 확인되었습니다.
+
+1. Canvas 공식 `tabs` 및 `sessionless_launch` GET API로 강의자료실에 진입
+2. HY-ON 외부도구의 자료 목록 GET 응답 조회
+3. 자료 열람 시 HY-CMS가 제공하는 `original.pdf` GET 응답 수집
+4. 홈서버에서 `pdftotext`로 텍스트를 추출하여 Docker 볼륨에 영구 캐시
+
+처음 원문을 요청할 때만 PDF를 받아 처리합니다. 이후 채팅이나 서버 컨테이너 재시작에서는 캐시된 텍스트를 사용하므로 같은 파일을 다시 업로드할 필요가 없습니다. 반환량은 한 번에 최대 20,000자로 제한되며 `offset`으로 다음 구간을 이어서 읽습니다.
+
+강의자료 캐시는 Git 저장소가 아닌 `learning-resource-cache` Docker 볼륨에만 저장됩니다. 원본 PDF는 텍스트 추출 직후 삭제하며, LMS 진도 변경 요청은 차단합니다. Canvas API 요청은 계속 GET만 사용하고, LTI 진입 과정에서 사이트가 수행하는 로그인 핸드셰이크 외에는 비-GET 요청을 허용하지 않습니다.
 
 ## 읽기 전용 API 감사
 
@@ -140,7 +155,7 @@ AUDIT_COURSE_ID=<COURSE_ID> docker compose --profile browser-audit run --rm lear
 
 ## 다음 단계
 
-현재 홈서버 MCP는 OpenAI Secure MCP Tunnel을 통해 비공개 CollegeHelper 플러그인에 연결됩니다. API 감사에서 모듈 항목은 지원되었지만, 학습자료 44개는 모두 Canvas `File`이 아닌 HY-ON의 `ExternalTool` 항목이었습니다. 과목 파일 목록은 `401`, 페이지 목록은 `404`였으므로 CollegeHelper는 모듈 항목과 안전한 Canvas 실행 링크까지만 제공하며 외부 학습도구 본문이나 파일을 자동 다운로드하지 않습니다.
+현재 홈서버 MCP는 OpenAI Secure MCP Tunnel을 통해 비공개 CollegeHelper 플러그인에 연결됩니다. Canvas 기본 Files API가 아닌 HY-ON 외부 학습도구 자료는 별도의 브라우저 워커가 원본 PDF를 읽기 전용으로 가져와 처리합니다.
 
 CollegeHelper는 공개 인바운드 주소 대신 OpenAI Secure MCP Tunnel을 사용합니다. Platform에서 `tunnel_id`와 `Tunnels Read + Use` 권한의 Runtime API key를 만든 뒤 홈서버에서 다음 스크립트를 실행합니다.
 

@@ -361,7 +361,7 @@ function sanitizeNetworkPath(pathname: string): string {
   const segments = pathname.split("/").map((segment) => {
     if (!segment) return segment;
     if (/^\d+$/.test(segment)) return ":id";
-    if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(segment)) return ":uuid";
+    if (/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(segment)) return ":uuid";
     if (/^[0-9a-f]{8,}$/i.test(segment)) return ":token";
     if (segment.includes("%") || !/^[A-Za-z0-9._-]+$/.test(segment) || segment.length > 48) return ":value";
     return segment;

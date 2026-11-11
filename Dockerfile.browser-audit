@@ -5,7 +5,12 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm ci \
+    && mkdir -p /data \
+    && chown pwuser:pwuser /data
 
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src

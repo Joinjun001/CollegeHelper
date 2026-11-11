@@ -10,6 +10,7 @@ const EnvironmentSchema = z
     REPORTS_DIR: z.string().trim().min(1).default("reports"),
     MCP_HOST: z.enum(["127.0.0.1", "::1", "0.0.0.0"]).default("127.0.0.1"),
     MCP_PORT: z.coerce.number().int().min(1).max(65_535).default(3_000),
+    LEARNING_RESOURCE_WORKER_URL: z.url().default("http://learning-resource-worker:3200"),
   })
   .superRefine((value, context) => {
     const url = new URL(value.CANVAS_BASE_URL);
@@ -45,6 +46,7 @@ export interface AppConfig {
   reportsDir: string;
   mcpHost: "127.0.0.1" | "::1" | "0.0.0.0";
   mcpPort: number;
+  learningResourceWorkerUrl: string;
 }
 
 export class ConfigError extends Error {
@@ -74,5 +76,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     reportsDir: result.data.REPORTS_DIR,
     mcpHost: result.data.MCP_HOST,
     mcpPort: result.data.MCP_PORT,
+    learningResourceWorkerUrl: result.data.LEARNING_RESOURCE_WORKER_URL.replace(/\/$/, ""),
   };
 }
