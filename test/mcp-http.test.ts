@@ -17,7 +17,7 @@ describe("MCP server", () => {
 
   it("lists tools and calls a read-only Canvas tool", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify([
-      { id: 215024, name: "테스트 과목", course_code: "TEST101", workflow_state: "available" },
+      { id: 999001, name: "테스트 과목", course_code: "TEST101", workflow_state: "available" },
     ]), { status: 200, headers: { "content-type": "application/json" } }));
     const canvas = new CanvasClient({
       baseUrl: "https://learning.example.edu",
@@ -50,7 +50,7 @@ describe("MCP server", () => {
     expect(result.structuredContent).toMatchObject({
       source: "Canvas LMS",
       untrustedContent: true,
-      courses: [{ id: "215024", name: "테스트 과목" }],
+      courses: [{ id: "999001", name: "테스트 과목" }],
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });

@@ -1,151 +1,168 @@
-# CollegeHelper
+<p align="center">
+  <img src="./docs/images/collegehelper-hero.png" alt="CollegeHelper — Private LMS intelligence for ChatGPT" width="100%" />
+</p>
 
-한양대학교 HY-ON(Canvas LMS)에서 개인 액세스 토큰으로 조회 가능한 읽기 API를 안전하게 조사하고, 이후 검증된 데이터만 MCP 도구로 제공하는 개인용 대학 생활 도우미 프로젝트입니다.
+<h1 align="center">CollegeHelper</h1>
 
-현재 구현 범위는 **Phase 0~4(API 감사, Canvas 서비스 계층, 읽기 전용 MCP 서버, 강의자료실 원본 PDF 캐시)** 입니다. 감사에서 정상 작동이 확인된 API만 도구로 제공합니다.
+<p align="center">
+  ChatGPT에서 과제, 공지, 강의자료를 바로 조회하고 학습할 수 있도록 만든<br />
+  <strong>개인용 Canvas LMS MCP 플러그인</strong>
+</p>
 
-## 목표 사용 방식
+<p align="center">
+  <img src="https://img.shields.io/badge/Node.js-22+-339933?logo=nodedotjs&logoColor=white" alt="Node.js 22+" />
+  <img src="https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/MCP-Streamable_HTTP-0B5FFF" alt="Model Context Protocol" />
+  <img src="https://img.shields.io/badge/Canvas-GET_only-E72429" alt="Canvas GET only" />
+  <img src="https://img.shields.io/badge/Docker-home_server-2496ED?logo=docker&logoColor=white" alt="Docker" />
+</p>
 
-CollegeHelper는 별도의 웹사이트나 브라우저 확장 프로그램이 아닙니다. ChatGPT 입력창에서 플러그인을 선택한 뒤 자연어로 요청하는 비공개 MCP 플러그인입니다.
+## 프로젝트 소개
 
-```text
-ChatGPT 입력창에서 CollegeHelper 선택
-                ↓
-        자연어 프롬프트 입력
-                ↓
-  ChatGPT가 CollegeHelper MCP 도구 호출
-                ↓
- 홈서버가 HY-ON Canvas API 실시간 조회
-                ↓
- ChatGPT가 조회 근거를 바탕으로 답변
-```
+대학 LMS에는 과제, 공지, 주차학습과 강의자료가 흩어져 있습니다. 필요한 정보를 확인하려면 매번 LMS에 접속해야 하고, 강의자료를 AI와 함께 공부하려면 파일을 채팅마다 다시 첨부해야 합니다.
 
-대표 프롬프트:
-
-- `@CollegeHelper 오늘 마감 과제와 아직 제출하지 않은 과제를 알려줘.`
-- `@CollegeHelper 객체지향개발론의 오늘 수업 자료를 찾아서 예습을 도와줘.`
-- `@CollegeHelper 최근 공지 중에서 내가 확인해야 할 내용만 정리해줘.`
-- `@CollegeHelper 앞으로 7일간의 과제와 일정을 우선순위대로 정리해줘.`
-
-예약 작업에서도 CollegeHelper를 명시하여 같은 MCP 도구를 호출합니다.
+CollegeHelper는 이 과정을 하나의 자연어 요청으로 연결합니다. ChatGPT가 홈서버의 MCP 도구를 호출하면 서버가 HY-ON(Canvas LMS)의 최신 데이터를 읽고, 필요한 근거만 정규화해 반환합니다. 강의자료실 PDF는 최초 요청 시 텍스트로 추출하여 영구 캐시하므로 이후 채팅에서도 다시 업로드할 필요가 없습니다.
 
 ```text
-매일 오전 8시에 @CollegeHelper를 사용해서 오늘 마감 과제와
-미제출 과제를 확인하고, 확인할 내용이 있을 때만 알려줘.
+@CollegeHelper 객체지향개발론의 note05를 불러와서 핵심 내용을 요약해줘.
+@CollegeHelper 앞으로 7일 동안 마감되는 미제출 과제를 우선순위대로 정리해줘.
+@CollegeHelper 최근 공지 중에서 내가 확인해야 할 내용만 알려줘.
 ```
 
-Canvas 토큰은 ChatGPT나 브라우저에 전달하지 않습니다. 토큰은 홈서버에만 저장하며, ChatGPT에는 질문에 필요한 정규화된 학습 데이터와 Canvas 원문 링크만 반환합니다.
+> 이 프로젝트는 개인 사용을 위한 비공개 플러그인입니다. Canvas 쓰기 작업, 과제 제출, 성적 조회 및 다중 사용자 기능은 제공하지 않습니다.
 
-상세 제품 요구사항은 [ChatGPT 플러그인 사용 흐름](./docs/CHATGPT_PLUGIN_UX.md)을 참고하세요.
+## 핵심 기능
+
+| 기능 | 설명 |
+|---|---|
+| 과목·과제 조회 | 현재 수강 과목, 마감일과 본인 제출 상태를 실시간으로 조회합니다. |
+| 공지·모듈 조회 | 최근 공지와 과목별 주차학습 구조를 필요한 필드만 정규화합니다. |
+| 강의자료 자동 수집 | Canvas 외부 LTI 강의자료실에서 사용자가 열람 가능한 PDF를 읽기 전용으로 가져옵니다. |
+| PDF 텍스트 캐시 | 원본 PDF를 텍스트화한 뒤 Docker 볼륨에 저장해 다음 채팅과 컨테이너 재시작에서도 재사용합니다. |
+| ChatGPT MCP 연동 | OpenAI Secure MCP Tunnel을 통해 공개 인바운드 포트 없이 홈서버 도구를 호출합니다. |
+| 방어적 보안 | Canvas GET 전용, 비인가 POST 차단, 토큰·원본 응답·PDF 비저장을 기본값으로 사용합니다. |
 
 ## 구동 예시
 
-### 강의자료 자동 조회 및 핵심 요약
+### 강의자료를 직접 불러와 학습
 
-CollegeHelper가 HY-ON 강의자료실에서 원본 PDF를 직접 가져와 텍스트를 추출하고, 실제 강의 내용을 근거로 핵심 개념을 정리합니다. 같은 자료는 홈서버 캐시를 재사용하므로 채팅마다 PDF를 다시 첨부할 필요가 없습니다.
+CollegeHelper가 강의자료실의 원본 PDF를 가져와 텍스트를 추출하고, ChatGPT가 실제 강의 내용을 근거로 핵심 개념을 정리합니다.
 
 ![CollegeHelper 강의자료 자동 조회 및 핵심 요약](./docs/images/collegehelper-learning-summary-redacted.png)
 
-### 과제·학습 일정 점검
+### 과제와 학습 일정 점검
 
-Canvas의 과제와 본인 제출 상태를 조회하여 남은 일정과 확인할 항목을 한 번에 정리합니다.
+Canvas 과제와 본인 제출 상태를 조회하여 남은 일정과 확인할 항목을 한 번에 정리합니다.
 
 ![CollegeHelper 과제 및 학습 일정 점검](./docs/images/collegehelper-task-check-redacted.png)
 
-> 공개 저장소에 포함되는 화면은 실제 수강 과목, 과제명, 마감일, 제출 상태와 세부내용을 블러 처리했습니다.
+> 공개 이미지에는 실제 과목명, 과제명, 마감일, 제출 상태와 세부 내용을 블러 처리했습니다.
 
-## 보안 원칙
+## 시스템 구조
 
-- 토큰은 `CANVAS_ACCESS_TOKEN` 환경변수에서만 읽습니다.
-- 토큰, Authorization 헤더, 응답 본문은 로그와 보고서에 기록하지 않습니다.
-- Canvas 요청은 `GET`으로 고정되어 있습니다.
-- 페이지네이션과 리다이렉트는 설정한 Canvas 호스트의 `/api/v1/` 경로만 허용합니다.
-- 생성 보고서는 필드명, 항목 수, 상태만 포함하며 Git에서 제외됩니다.
+```mermaid
+flowchart LR
+    User[사용자 프롬프트] --> ChatGPT[ChatGPT + CollegeHelper]
+    ChatGPT --> Tunnel[Secure MCP Tunnel]
+    Tunnel --> MCP[CollegeHelper MCP Server]
 
-## 준비
+    MCP --> Canvas[Canvas REST API<br/>GET only]
+    MCP --> Worker[Learning Resource Worker]
+    Worker --> LTI[HY-ON LTI 자료실]
+    LTI --> PDF[원본 PDF]
+    PDF --> Extract[pdftotext]
+    Extract --> Cache[(Docker text cache)]
+    Cache --> MCP
 
-Node.js 22 이상이 필요합니다.
+    classDef core fill:#0b5fff,color:#fff,stroke:#58d7ff;
+    classDef secure fill:#11263f,color:#fff,stroke:#33d1ff;
+    class ChatGPT,MCP core;
+    class Tunnel,Worker,Cache secure;
+```
+
+MCP 서버는 공개 주소를 직접 열지 않고 Secure MCP Tunnel에 연결됩니다. Canvas API 데이터는 서비스 계층에서 정규화하며, 외부 LTI 자료실만 격리된 Playwright 워커가 처리합니다. 자세한 흐름은 [아키텍처 문서](./docs/ARCHITECTURE.md)를 참고하세요.
+
+## 구현 과정에서 해결한 문제
+
+### 1. API가 존재하는 것과 실제로 사용할 수 있는 것은 달랐습니다
+
+Canvas 공식 문서의 엔드포인트를 곧바로 도구로 만들지 않고, 개인 토큰으로 비식별 API 감사를 수행했습니다. 실제 HY-ON 환경에서 `supported`로 확인된 데이터만 MCP 도구로 노출했습니다.
+
+### 2. 강의자료실은 Canvas Files API가 아니었습니다
+
+강의자료실은 별도의 LTI 외부 학습도구였습니다. Canvas의 공식 `tabs`와 `sessionless_launch` GET 경로로 진입한 뒤, 브라우저 네트워크 감사를 통해 자료 목록과 `original.pdf` 읽기 경로를 확인했습니다.
+
+### 3. 채팅마다 PDF를 다시 첨부하면 학습 흐름이 끊겼습니다
+
+최초 요청에서만 PDF를 내려받고 `pdftotext`로 변환합니다. 원본 파일은 즉시 삭제하고 추출 텍스트만 Docker 볼륨에 저장하여 세션과 컨테이너가 바뀌어도 재사용하도록 설계했습니다.
+
+### 4. LMS 자동화가 사용자 상태를 바꾸면 안 됐습니다
+
+Canvas API는 GET 요청만 허용하고 모든 MCP 도구에 읽기 전용 힌트를 지정했습니다. LTI 로그인 핸드셰이크 외의 비-GET 네트워크 요청은 워커에서 차단하여 진도율이나 완료 상태가 바뀌지 않도록 했습니다.
+
+## 검증 결과
+
+개발 환경에서 다음 동작을 확인했습니다. 실제 응답 본문과 사용자 데이터는 테스트 fixture나 Git 이력에 저장하지 않았습니다.
+
+| 검증 항목 | 결과 |
+|---|---:|
+| 제공 MCP 도구 | 9개 |
+| 실제 과목 강의자료 목록 | 11개 조회 |
+| `note05.pdf` 추출 텍스트 | 24,230자 |
+| 캐시 재호출 | 약 4ms 관측 |
+| 컨테이너 재시작 후 캐시 | 유지 확인 |
+| 자동화 테스트 | 9개 파일, 20개 테스트 |
+
+## 제공 도구
+
+| MCP 도구 | 용도 |
+|---|---|
+| `list_courses` | 현재 수강 과목 조회 |
+| `get_today_tasks` | 지정 날짜의 과제와 제출 상태 조회 |
+| `get_upcoming_tasks` | 최대 31일 범위의 예정 과제 조회 |
+| `get_announcements` | 최근 과목 공지 조회 |
+| `get_course_modules` | 과목별 학습 모듈 조회 |
+| `get_course_module_items` | 모듈별 과제·외부 학습자료 항목 조회 |
+| `get_assignment_context` | 과제 설명, 마감일과 제출 상태 조회 |
+| `list_course_learning_resources` | LTI 강의자료 목록과 캐시 상태 조회 |
+| `get_learning_resource_text` | PDF 원문 자동 수집 및 텍스트 구간 조회 |
+
+모든 도구는 읽기 전용이며 외부에서 가져온 본문은 신뢰되지 않은 콘텐츠로 표시합니다.
+
+## 기술 스택
+
+- **Runtime:** Node.js 22, TypeScript
+- **Protocol:** Model Context Protocol, Streamable HTTP
+- **Validation:** Zod
+- **Browser worker:** Playwright, Chromium
+- **Document extraction:** Poppler `pdftotext`
+- **Test:** Vitest, ESLint, TypeScript type checking
+- **Deployment:** Docker Compose, systemd user service
+- **Connection:** OpenAI Secure MCP Tunnel
+
+## 빠른 시작
+
+### 1. 로컬 설정
 
 ```bash
 npm install
 cp .env.example .env
-```
-
-`.env`에 HY-ON의 Canvas 루트 주소와 개인 액세스 토큰을 직접 저장합니다. 토큰을 채팅, 이슈, 커밋 또는 테스트 fixture에 붙여 넣지 마세요.
-
-홈서버에서는 토큰이 화면이나 셸 기록에 남지 않도록 보안 입력 스크립트를 사용합니다.
-
-```bash
 ./scripts/configure-env.sh
 ```
 
-스크립트는 토큰을 숨김 입력으로 받고 권한이 `600`인 `.env`를 생성합니다. 기존 `.env`가 있으면 자동으로 덮어쓰지 않습니다.
+토큰은 보안 입력 스크립트로 로컬 `.env`에만 저장합니다. 토큰을 채팅, 이슈, 커밋 또는 테스트 fixture에 입력하지 마세요.
 
-```dotenv
-CANVAS_BASE_URL=https://<HY-ON-CANVAS-DOMAIN>
-CANVAS_ACCESS_TOKEN=<LOCAL_SECRET_ONLY>
-```
-
-## 검증
+### 2. 검증 및 개발 서버
 
 ```bash
 npm run check
 npm run build
-```
-
-MCP 서버를 개발 모드로 실행하면 기본적으로 로컬 인터페이스의 `http://127.0.0.1:3000/mcp`에서 대기합니다.
-
-```bash
 npm run dev
 ```
 
-상태 확인 주소는 `http://127.0.0.1:3000/healthz`입니다.
+기본 MCP 엔드포인트는 `http://127.0.0.1:3000/mcp`, 상태 확인 주소는 `http://127.0.0.1:3000/healthz`입니다.
 
-## 제공하는 MCP 도구
-
-- `list_courses`: 현재 수강 과목 조회
-- `get_today_tasks`: 특정 날짜의 과제와 제출 여부 조회
-- `get_upcoming_tasks`: 최대 31일 범위의 예정 과제 조회
-- `get_announcements`: 최근 과목 공지 조회
-- `get_course_modules`: 과목별 학습 모듈 조회
-- `get_course_module_items`: 모듈별 과제·외부 학습자료 항목과 Canvas 실행 링크 조회
-- `get_assignment_context`: 과제 설명, 마감일, 제출 상태 조회
-- `list_course_learning_resources`: HY-ON 강의자료실의 자료 목록과 캐시 상태 조회
-- `get_learning_resource_text`: 원본 PDF를 자동 수집·텍스트화하고 필요한 구간 조회
-
-모든 도구는 LMS에 대해 읽기 전용입니다. 성적, 점수, 이메일, 로그인 ID와 액세스 토큰은 결과에 포함하지 않습니다. Canvas가 반환한 설명, 공지 및 강의자료 원문은 `untrustedContent: true`로 표시합니다.
-
-## 강의자료 자동 학습
-
-HY-ON의 `강의자료실`은 Canvas 기본 Files API가 아니라 외부 학습도구입니다. 비식별 감사로 다음 읽기 경로가 확인되었습니다.
-
-1. Canvas 공식 `tabs` 및 `sessionless_launch` GET API로 강의자료실에 진입
-2. HY-ON 외부도구의 자료 목록 GET 응답 조회
-3. 자료 열람 시 HY-CMS가 제공하는 `original.pdf` GET 응답 수집
-4. 홈서버에서 `pdftotext`로 텍스트를 추출하여 Docker 볼륨에 영구 캐시
-
-처음 원문을 요청할 때만 PDF를 받아 처리합니다. 이후 채팅이나 서버 컨테이너 재시작에서는 캐시된 텍스트를 사용하므로 같은 파일을 다시 업로드할 필요가 없습니다. 반환량은 한 번에 최대 20,000자로 제한되며 `offset`으로 다음 구간을 이어서 읽습니다.
-
-강의자료 캐시는 Git 저장소가 아닌 `learning-resource-cache` Docker 볼륨에만 저장됩니다. 원본 PDF는 텍스트 추출 직후 삭제하며, LMS 진도 변경 요청은 차단합니다. Canvas API 요청은 계속 GET만 사용하고, LTI 진입 과정에서 사이트가 수행하는 로그인 핸드셰이크 외에는 비-GET 요청을 허용하지 않습니다.
-
-## 읽기 전용 API 감사
-
-실제 API 호출은 사용자가 로컬 `.env`를 준비한 뒤 직접 실행합니다.
-
-```bash
-npm run audit
-```
-
-결과는 다음 비식별 보고서로 생성됩니다.
-
-- `reports/canvas-api-audit.json`
-- `reports/canvas-api-audit.md`
-
-감사는 최대 3개 활성 과목, 엔드포인트당 최대 10페이지를 순차적으로 조회합니다. 각각 `AUDIT_MAX_COURSES`, `AUDIT_MAX_PAGES`로 더 낮게 조정할 수 있습니다.
-
-## Docker
-
-로컬 `.env`를 만든 뒤 MCP 서버를 실행합니다. 호스트에는 루프백 포트만 공개됩니다.
+### 3. Docker 실행
 
 ```bash
 docker compose up -d --build college-helper
@@ -153,44 +170,47 @@ curl http://127.0.0.1:3100/healthz
 npm run smoke:mcp
 ```
 
-일회성 API 감사는 별도 프로필로 실행합니다.
+호스트에는 루프백 포트만 공개됩니다. 강의자료 텍스트는 Git 저장소가 아닌 `learning-resource-cache` Docker 볼륨에 저장됩니다.
 
-```bash
-docker compose --profile audit run --rm --user "$(id -u):$(id -g)" canvas-audit
-```
+### 4. Secure MCP Tunnel 설정
 
-강의자료실처럼 JavaScript로 목록을 불러오는 외부도구는 감사 전용 Playwright 컨테이너에서 네트워크 응답 본문이나 HAR를 저장하지 않고 비식별 경로만 확인합니다.
-
-```bash
-AUDIT_COURSE_ID=<COURSE_ID> docker compose --profile browser-audit run --rm learning-resource-browser-audit
-```
-
-## TypeScript 설정의 역할
-
-`tsconfig.json`, ESLint, Vitest는 CollegeHelper를 TypeScript로 안전하게 개발하고 검증하기 위한 내부 도구입니다. ChatGPT에서 플러그인을 호출할 때 사용자가 직접 다룰 파일은 아닙니다. 배포 환경에서는 빌드된 JavaScript와 MCP 서버만 실행됩니다.
-
-## 다음 단계
-
-현재 홈서버 MCP는 OpenAI Secure MCP Tunnel을 통해 비공개 CollegeHelper 플러그인에 연결됩니다. Canvas 기본 Files API가 아닌 HY-ON 외부 학습도구 자료는 별도의 브라우저 워커가 원본 PDF를 읽기 전용으로 가져와 처리합니다.
-
-CollegeHelper는 공개 인바운드 주소 대신 OpenAI Secure MCP Tunnel을 사용합니다. Platform에서 `tunnel_id`와 `Tunnels Read + Use` 권한의 Runtime API key를 만든 뒤 홈서버에서 다음 스크립트를 실행합니다.
+Platform에서 생성한 Runtime API key는 다음 스크립트로 홈서버에 안전하게 입력합니다.
 
 ```bash
 ./scripts/configure-openai-tunnel.sh
 ```
 
-키는 `/home/injun/apps/tunnel-client/secrets/runtime.key`에 권한 `600`으로 저장되고 명령 인자나 Git 저장소에는 들어가지 않습니다.
+터널 서비스 설치와 홈서버 운영 절차는 [플러그인 사용 흐름](./docs/CHATGPT_PLUGIN_UX.md)과 [아키텍처 문서](./docs/ARCHITECTURE.md)를 참고하세요.
 
-설정 후에는 사용자 서비스로 터널을 실행할 수 있습니다.
+## 보안과 개인정보 보호
 
-```bash
-mkdir -p ~/.config/systemd/user
-cp deploy/college-helper-tunnel.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now college-helper-tunnel.service
-```
+- Canvas 토큰은 홈서버 환경변수에서만 읽습니다.
+- 토큰, Authorization 헤더와 원본 API 응답은 로그에 기록하지 않습니다.
+- Canvas API 요청은 설정된 호스트의 `/api/v1/` GET 경로로 제한합니다.
+- 원본 PDF는 텍스트 추출 직후 삭제합니다.
+- 성적, 점수, 이메일과 로그인 ID는 MCP 응답에서 제외합니다.
+- 실제 사용자 응답은 테스트, 스냅샷, 보고서와 Git 이력에 저장하지 않습니다.
 
-SSH 세션이 없는 동안과 재부팅 후에도 사용자 서비스를 유지하려면 서버 관리자가
-한 번만 `sudo loginctl enable-linger "$USER"`를 실행해야 합니다.
+자세한 위협 모델과 방어선은 [보안 문서](./docs/SECURITY.md)를 참고하세요.
 
-작동하지 않는 임시 MCP 주소를 저장소에 넣지 않습니다. 자세한 기준은 [개발 제안서](./CollegeHelper_개발_제안서.md)를 따릅니다.
+## 현재 범위와 로드맵
+
+현재 구현은 API 감사, 읽기 전용 Canvas 서비스, MCP 서버, LTI 강의자료 수집과 영구 캐시까지 포함합니다.
+
+- [x] Canvas API 비식별 감사
+- [x] 과목·과제·제출 상태·공지·모듈 조회
+- [x] ChatGPT 비공개 MCP 플러그인 연결
+- [x] LTI 강의자료 목록 및 PDF 원문 추출
+- [x] 재시작에도 유지되는 텍스트 캐시
+- [ ] 변경된 강의자료의 캐시 갱신 정책
+- [ ] 예약 작업 기반 일일 학습 브리핑 고도화
+- [ ] PDF 외 문서 형식 지원 검토
+
+다중 사용자, Canvas 쓰기 작업, 과제 자동 제출과 성적 조회는 의도적으로 범위에서 제외합니다.
+
+## 문서
+
+- [개발 제안서](./CollegeHelper_개발_제안서.md)
+- [시스템 아키텍처](./docs/ARCHITECTURE.md)
+- [보안 설계](./docs/SECURITY.md)
+- [ChatGPT 플러그인 사용 흐름](./docs/CHATGPT_PLUGIN_UX.md)

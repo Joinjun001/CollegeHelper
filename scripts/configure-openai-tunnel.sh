@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-client_root="${TUNNEL_CLIENT_ROOT:-/home/injun/apps/tunnel-client}"
+client_root="${TUNNEL_CLIENT_ROOT:-${HOME:?HOME 환경변수가 필요합니다}/apps/tunnel-client}"
 client_binary="${client_root}/current/tunnel-client"
 secret_directory="${client_root}/secrets"
 key_file="${secret_directory}/runtime.key"
