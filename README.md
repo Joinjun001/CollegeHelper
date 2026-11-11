@@ -38,6 +38,22 @@ Canvas 토큰은 ChatGPT나 브라우저에 전달하지 않습니다. 토큰은
 
 상세 제품 요구사항은 [ChatGPT 플러그인 사용 흐름](./docs/CHATGPT_PLUGIN_UX.md)을 참고하세요.
 
+## 구동 예시
+
+### 강의자료 자동 조회 및 핵심 요약
+
+CollegeHelper가 HY-ON 강의자료실에서 원본 PDF를 직접 가져와 텍스트를 추출하고, 실제 강의 내용을 근거로 핵심 개념을 정리합니다. 같은 자료는 홈서버 캐시를 재사용하므로 채팅마다 PDF를 다시 첨부할 필요가 없습니다.
+
+![CollegeHelper 강의자료 자동 조회 및 핵심 요약](./docs/images/collegehelper-learning-summary-redacted.png)
+
+### 과제·학습 일정 점검
+
+Canvas의 과제와 본인 제출 상태를 조회하여 남은 일정과 확인할 항목을 한 번에 정리합니다.
+
+![CollegeHelper 과제 및 학습 일정 점검](./docs/images/collegehelper-task-check-redacted.png)
+
+> 공개 저장소에 포함되는 화면은 실제 수강 과목, 과제명, 마감일, 제출 상태와 세부내용을 블러 처리했습니다.
+
 ## 보안 원칙
 
 - 토큰은 `CANVAS_ACCESS_TOKEN` 환경변수에서만 읽습니다.
