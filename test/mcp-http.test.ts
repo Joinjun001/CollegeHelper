@@ -134,5 +134,17 @@ describe("MCP server", () => {
     ]));
     expect(result.structuredContent).toMatchObject({ page: 3, pageCount: 24, cached: false });
     expect(JSON.stringify(result.structuredContent)).not.toContain("aW1hZ2U=");
+
+    const tools = await client.listTools();
+    const pageImageTool = tools.tools.find((tool) => tool.name === "get_learning_resource_page_image");
+    expect(pageImageTool?._meta).toMatchObject({ ui: { resourceUri: "ui://college-helper/pdf-page-image-v1.html" } });
+
+    const resource = await client.readResource({ uri: "ui://college-helper/pdf-page-image-v1.html" });
+    expect(resource.contents[0]).toMatchObject({
+      uri: "ui://college-helper/pdf-page-image-v1.html",
+      mimeType: "text/html;profile=mcp-app",
+    });
+    const widgetContent = resource.contents[0];
+    expect(widgetContent && "text" in widgetContent ? widgetContent.text : "").toContain("toolResponseMetadata");
   });
 });

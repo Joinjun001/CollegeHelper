@@ -96,6 +96,7 @@ ChatGPT는 Secure MCP Tunnel을 통해 홈서버의 CollegeHelper를 호출합�
 - Canvas 기본 파일 기능이 아닌 **외부 LTI 강의자료실과 모듈 항목의 읽기 경로**를 별도로 조사했습니다.
 - 원본 PDF는 텍스트 추출 후 삭제하고, 재사용할 텍스트만 Docker 볼륨에 저장합니다.
 - 페이지 이미지는 요청할 때만 만들고 메모리에 최대 10분 보관한 뒤 삭제합니다.
+- ChatGPT에서는 MCP Apps 뷰어가 페이지 이미지를 대화 안에 표시하고, UI 미지원 클라이언트에는 표준 MCP 이미지 콘텐츠를 반환합니다.
 - Canvas 요청은 GET으로 제한하고, LTI 로그인 외의 비-GET 요청은 워커에서 차단합니다.
 - MCP 포트는 외부에 열지 않고 Secure MCP Tunnel로 연결합니다.
 

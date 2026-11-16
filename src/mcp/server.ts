@@ -5,6 +5,7 @@ import { CanvasError } from "../canvas/errors.js";
 import { seoulDayRange, todayInSeoul } from "../canvas/service.js";
 import type { CanvasService } from "../canvas/service.js";
 import type { LearningResourceClient, LearningResourcePageImage } from "../learning/client.js";
+import { pageImageWidgetHtml, pageImageWidgetUri } from "./page-image-widget.js";
 
 const DateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD 형식이어야 합니다.");
 const IdSchema = z.string().regex(/^\d+$/, "Canvas ID는 숫자 문자열이어야 합니다.");
@@ -79,6 +80,19 @@ export function createCollegeHelperMcpServer(service: CanvasService, learningRes
   }, async ({ courseId, assignmentId }) => toolCall(() => service.getAssignmentContext(courseId, assignmentId)));
 
   if (learningResources) {
+    server.registerResource("강의자료 PDF 페이지 뷰어", pageImageWidgetUri, {
+      title: "강의자료 PDF 페이지 뷰어",
+      description: "CollegeHelper가 렌더링한 PDF 한 페이지를 대화 안에 표시합니다.",
+      mimeType: "text/html;profile=mcp-app",
+    }, () => Promise.resolve({
+      contents: [{
+        uri: pageImageWidgetUri,
+        mimeType: "text/html;profile=mcp-app",
+        text: pageImageWidgetHtml,
+        _meta: { ui: { prefersBorder: true } },
+      }],
+    }));
+
     server.registerTool("list_course_learning_resources", {
       title: "과목 학습자료 목록 조회",
       description: "지정한 과목의 HY-ON 강의자료실과 주차별 학습 모듈에서 열람 가능한 PDF 목록과 서버 캐시 여부를 조회합니다. 원문을 읽으려면 반환된 resourceLocator를 get_learning_resource_text에 전달합니다. 기존 강의자료실 resourceId도 계속 지원합니다.",
@@ -114,6 +128,23 @@ export function createCollegeHelperMcpServer(service: CanvasService, learningRes
         page: z.number().int().min(1).describe("표시할 PDF 페이지 번호(1부터 시작)"),
         dpi: z.union([z.literal(96), z.literal(144), z.literal(192)]).default(144).describe("이미지 해상도"),
       }),
+      outputSchema: z.object({
+        courseId: IdSchema,
+        resourceLocator: ResourceLocatorSchema,
+        title: z.string(),
+        page: z.number().int().positive(),
+        pageCount: z.number().int().positive(),
+        dpi: z.union([z.literal(96), z.literal(144), z.literal(192)]),
+        mimeType: z.literal("image/png"),
+        byteLength: z.number().int().positive(),
+        cached: z.boolean(),
+      }),
+      _meta: {
+        ui: { resourceUri: pageImageWidgetUri },
+        "openai/outputTemplate": pageImageWidgetUri,
+        "openai/toolInvocation/invoking": "PDF 페이지를 렌더링하는 중…",
+        "openai/toolInvocation/invoked": "PDF 페이지를 표시했습니다.",
+      },
       annotations: ReadOnlyAnnotations,
     }, async ({ courseId, resourceLocator, page, dpi }) => imageToolCall(
       () => learningResources.getPageImage(courseId, resourceLocator, page, dpi),
