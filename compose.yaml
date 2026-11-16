@@ -85,5 +85,25 @@ services:
       - no-new-privileges:true
     restart: "no"
 
+  module-item-browser-audit:
+    build:
+      context: .
+      dockerfile: Dockerfile.browser-audit
+    profiles: ["browser-audit"]
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      AUDIT_COURSE_ID: ${AUDIT_COURSE_ID:-}
+      AUDIT_MODULE_ITEM_ID: ${AUDIT_MODULE_ITEM_ID:-}
+    command: ["node", "dist/scripts/audit-module-item-browser.js"]
+    ipc: host
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
 volumes:
   learning-resource-cache:

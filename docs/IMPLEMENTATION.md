@@ -99,14 +99,16 @@ npm run audit
 
 ## 강의자료 처리 흐름
 
-HY-ON의 강의자료실은 Canvas 기본 Files API가 아니라 LTI 외부 학습도구입니다.
+HY-ON의 강의자료실과 일부 주차별 학습자료는 Canvas 기본 Files API가 아니라 LTI 외부 학습도구입니다.
 
-1. Canvas `tabs`와 `sessionless_launch` GET API로 자료실 진입 정보를 얻습니다.
-2. 격리된 Playwright 워커가 자료 목록을 읽습니다.
-3. 자료 요청 시 HY-CMS의 `original.pdf`를 임시로 수집합니다.
-4. `pdftotext`로 텍스트를 추출합니다.
-5. 원본 PDF를 삭제하고 텍스트만 Docker 볼륨에 저장합니다.
-6. 다음 채팅과 컨테이너 재시작에서는 캐시된 텍스트를 반환합니다.
+1. 강의자료실은 Canvas `tabs`와 `course_navigation` sessionless launch로 진입합니다.
+2. 주차별 자료는 모듈·모듈 항목 API에서 `ExternalTool` 항목을 찾고, 공식 `module_item` sessionless launch로 진입합니다.
+3. 격리된 Playwright 워커가 실제 `original.pdf` 응답이 확인된 자료만 통합 목록에 포함합니다.
+4. `resourceLocator`는 `course-resource:<id>`와 `module-item:<id>`를 구분하며, 기존 강의자료실 `resourceId` 호출도 유지합니다.
+5. 자료 요청 시 HY-CMS의 `original.pdf`를 임시로 수집합니다.
+6. MIME, 크기와 `%PDF-` 서명을 검증한 뒤 `pdftotext`로 텍스트를 추출합니다.
+7. 원본 PDF를 삭제하고 텍스트만 Docker 볼륨에 저장합니다.
+8. 다음 채팅과 컨테이너 재시작에서는 캐시된 텍스트를 반환합니다.
 
 한 번에 반환하는 텍스트는 최대 20,000자이며 `offset`을 이용해 긴 문서를 이어서 읽습니다. 자세한 컴포넌트와 신뢰 경계는 [아키텍처 문서](./ARCHITECTURE.md)를 참고하세요.
 
@@ -136,6 +138,13 @@ AUDIT_COURSE_ID=<SYNTHETIC_EXAMPLE_ID> \
 ```
 
 감사 워커는 HAR, 네트워크 응답 본문과 인증 쿠키를 저장하지 않습니다.
+
+개별 모듈 항목의 sessionless launch와 PDF 추출 가능 여부는 다음 비식별 감사로 확인합니다. 결과에는 토큰, 쿠키, 서명 URL과 PDF 본문이 포함되지 않습니다.
+
+```bash
+AUDIT_COURSE_ID=<COURSE_ID> AUDIT_MODULE_ITEM_ID=<MODULE_ITEM_ID> \
+  docker compose --profile browser-audit run --rm module-item-browser-audit
+```
 
 ## Secure MCP Tunnel
 

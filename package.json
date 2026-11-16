@@ -15,6 +15,7 @@
     "check": "npm run typecheck && npm run lint && npm test",
     "audit": "node --env-file-if-exists=.env --import tsx scripts/audit-canvas-api.ts",
     "audit:learning-browser": "node --env-file-if-exists=.env --import tsx scripts/audit-learning-resource-browser.ts",
+    "audit:module-item-browser": "node --env-file-if-exists=.env --import tsx scripts/audit-module-item-browser.ts",
     "smoke:mcp": "node --import tsx scripts/smoke-mcp.ts",
     "dev": "node --env-file-if-exists=.env --import tsx src/index.ts",
     "start": "node --env-file-if-exists=.env dist/src/index.js"

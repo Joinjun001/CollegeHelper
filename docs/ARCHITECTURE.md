@@ -66,10 +66,10 @@ flowchart TB
 
 ### 강의자료 원문
 
-1. `list_course_learning_resources`가 과목의 강의자료와 캐시 상태를 반환합니다.
-2. ChatGPT가 선택한 `resourceId`로 `get_learning_resource_text`를 호출합니다.
+1. `list_course_learning_resources`가 강의자료실과 모듈의 PDF 및 캐시 상태를 반환합니다.
+2. ChatGPT가 선택한 충돌 방지 `resourceLocator`로 `get_learning_resource_text`를 호출합니다. 기존 강의자료실 `resourceId`도 계속 지원합니다.
 3. 캐시가 있으면 저장된 텍스트를 즉시 반환합니다.
-4. 캐시가 없으면 워커가 Canvas의 공식 sessionless launch로 LTI 자료실에 진입합니다.
+4. 캐시가 없으면 워커가 Canvas의 공식 `course_navigation` 또는 `module_item` sessionless launch로 LTI 자료에 진입합니다.
 5. 사용자가 열람할 수 있는 `original.pdf`를 임시 디렉터리에 내려받습니다.
 6. `pdftotext`로 텍스트를 추출하고 원본 PDF를 삭제합니다.
 7. 텍스트를 Docker 볼륨에 저장하고 요청한 구간만 MCP 서버에 반환합니다.
@@ -84,7 +84,7 @@ flowchart TB
 | Canvas client | 호스트·경로·메서드 제한, 인증, 페이지네이션 |
 | Canvas service | 실제 응답 정규화와 개인정보 필드 제거 |
 | Learning resource client | MCP 서버와 워커 사이의 제한된 내부 통신 |
-| Playwright worker | LTI 진입, 자료 목록 조회, PDF 수집과 네트워크 차단 |
+| Playwright worker | 강의자료실·모듈 LTI 진입, PDF 탐색·수집과 네트워크 차단 |
 | Docker volume | 추출된 강의자료 텍스트의 영구 캐시 |
 | Secure MCP Tunnel | 공개 인바운드 포트 없는 ChatGPT 연결 |
 

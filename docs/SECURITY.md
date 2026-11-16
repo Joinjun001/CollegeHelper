@@ -36,8 +36,10 @@
 ### 외부 LTI 자료실
 
 - Canvas 공식 sessionless launch로만 진입합니다.
-- 사이트가 요구하는 로그인 핸드셰이크 이외의 비-GET 요청을 차단합니다.
+- 강의자료실은 `course_navigation`, 모듈 자료는 `module_item` 실행 형식만 사용합니다.
+- 동일 Canvas 호스트의 최초 LTI 탐색 POST 한 번을 제외한 비-GET 요청을 차단합니다.
 - 진도, 완료 상태와 사용자 행동 기록을 변경하는 요청을 허용하지 않습니다.
+- PDF는 `hycms.hanyang.ac.kr`의 검증된 `*/original.pdf` HTTPS GET으로 제한하고 MIME·크기·파일 서명을 확인합니다.
 - 브라우저 감사 시 HAR, 응답 본문과 쿠키를 저장하지 않습니다.
 
 ### 홈서버

@@ -1,12 +1,18 @@
 import { z } from "zod";
 
 const ResourceSchema = z.object({
-  resourceId: z.string().regex(/^\d+$/),
+  resourceLocator: z.string().regex(/^(course-resource|module-item):\d+$/),
+  location: z.enum(["course_resource", "module_item"]),
+  resourceId: z.string().regex(/^\d+$/).nullable(),
+  moduleId: z.string().regex(/^\d+$/).nullable(),
+  moduleItemId: z.string().regex(/^\d+$/).nullable(),
+  moduleName: z.string().nullable(),
   title: z.string(),
   fileName: z.string().nullable(),
   contentType: z.string().nullable(),
   position: z.number().int().nullable(),
   published: z.boolean().nullable(),
+  pdfAvailable: z.boolean(),
   cached: z.boolean(),
 });
 
@@ -17,7 +23,10 @@ const ResourceListSchema = z.object({
 
 const ResourceTextSchema = z.object({
   courseId: z.string().regex(/^\d+$/),
-  resourceId: z.string().regex(/^\d+$/),
+  resourceLocator: z.string().regex(/^(course-resource|module-item):\d+$/),
+  location: z.enum(["course_resource", "module_item"]),
+  resourceId: z.string().regex(/^\d+$/).nullable(),
+  moduleItemId: z.string().regex(/^\d+$/).nullable(),
   title: z.string(),
   text: z.string(),
   offset: z.number().int().nonnegative(),
@@ -35,15 +44,23 @@ export class LearningResourceClient {
 
   async list(courseId: string): Promise<Record<string, unknown>> {
     const value = ResourceListSchema.parse(await this.get(`/courses/${encodeURIComponent(courseId)}/resources`));
-    return { source: "HY-ON 강의자료실", untrustedContent: true, ...value };
+    return { source: "HY-ON 강의자료실 및 주차별 학습 모듈", untrustedContent: true, ...value };
   }
 
-  async getText(courseId: string, resourceId: string, offset: number, maxChars: number): Promise<Record<string, unknown>> {
-    const params = new URLSearchParams({ offset: String(offset), maxChars: String(maxChars) });
+  async getText(
+    courseId: string,
+    resourceId: string | undefined,
+    resourceLocator: string | undefined,
+    offset: number,
+    maxChars: number,
+  ): Promise<Record<string, unknown>> {
+    const locator = resourceLocator ?? (resourceId ? `course-resource:${resourceId}` : undefined);
+    if (!locator) throw new Error("learning resource locator is required");
+    const params = new URLSearchParams({ locator, offset: String(offset), maxChars: String(maxChars) });
     const value = ResourceTextSchema.parse(await this.get(
-      `/courses/${encodeURIComponent(courseId)}/resources/${encodeURIComponent(resourceId)}/text?${params.toString()}`,
+      `/courses/${encodeURIComponent(courseId)}/resources/text?${params.toString()}`,
     ));
-    return { source: "HY-ON 강의자료실 원본 PDF", untrustedContent: true, ...value };
+    return { source: "HY-ON 학습자료 원본 PDF", untrustedContent: true, ...value };
   }
 
   private async get(path: string): Promise<unknown> {

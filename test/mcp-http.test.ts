@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CanvasClient } from "../src/canvas/client.js";
 import { CanvasService } from "../src/canvas/service.js";
+import { LearningResourceClient } from "../src/learning/client.js";
 import { createCollegeHelperMcpServer } from "../src/mcp/server.js";
 
 describe("MCP server", () => {
@@ -53,5 +54,43 @@ describe("MCP server", () => {
       courses: [{ id: "999001", name: "테스트 과목" }],
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("모듈 항목 locator로 학습자료 원문 도구를 호출한다", async () => {
+    const canvasFetch = vi.fn<typeof fetch>();
+    const learningFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      courseId: "999001",
+      resourceLocator: "module-item:456",
+      location: "module_item",
+      resourceId: null,
+      moduleItemId: "456",
+      title: "주차별 PDF",
+      text: "합성 테스트 본문",
+      offset: 0,
+      nextOffset: null,
+      totalChars: 9,
+      cachedAt: "2026-11-16T00:00:00.000Z",
+    }), { status: 200 }));
+    const canvas = new CanvasClient({
+      baseUrl: "https://learning.example.edu",
+      accessToken: "test-token",
+      timeoutMs: 1_000,
+      fetchImpl: canvasFetch,
+    });
+    const learning = new LearningResourceClient("http://worker:3200", 1_000, learningFetch);
+    server = createCollegeHelperMcpServer(new CanvasService(canvas, 2), learning);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    client = new Client({ name: "college-helper-test", version: "0.1.0" });
+    await client.connect(clientTransport);
+
+    const result = await client.callTool({
+      name: "get_learning_resource_text",
+      arguments: { courseId: "999001", resourceLocator: "module-item:456" },
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ resourceLocator: "module-item:456", moduleItemId: "456" });
+    expect(learningFetch).toHaveBeenCalledTimes(1);
   });
 });
