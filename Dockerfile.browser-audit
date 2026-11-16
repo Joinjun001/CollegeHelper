@@ -15,6 +15,7 @@ RUN apt-get update \
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 COPY scripts ./scripts
+COPY web ./web
 RUN npm run build
 
 ENV NODE_ENV=production
