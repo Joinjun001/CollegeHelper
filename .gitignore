@@ -1,5 +1,6 @@
 node_modules/
 dist/
+public/page-image-widget.js
 coverage/
 .env
 .env.*

@@ -5,7 +5,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
-    ignores: ["dist/**", "node_modules/**", "reports/*.json", "reports/*.md"],
+    ignores: ["dist/**", "node_modules/**", "public/page-image-widget.js", "reports/*.json", "reports/*.md"],
   },
   {
     files: ["**/*.js"],

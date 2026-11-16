@@ -137,14 +137,14 @@ describe("MCP server", () => {
 
     const tools = await client.listTools();
     const pageImageTool = tools.tools.find((tool) => tool.name === "get_learning_resource_page_image");
-    expect(pageImageTool?._meta).toMatchObject({ ui: { resourceUri: "ui://college-helper/pdf-page-image-v1.html" } });
+    expect(pageImageTool?._meta).toMatchObject({ ui: { resourceUri: "ui://college-helper/pdf-page-image-v2.html" } });
 
-    const resource = await client.readResource({ uri: "ui://college-helper/pdf-page-image-v1.html" });
+    const resource = await client.readResource({ uri: "ui://college-helper/pdf-page-image-v2.html" });
     expect(resource.contents[0]).toMatchObject({
-      uri: "ui://college-helper/pdf-page-image-v1.html",
+      uri: "ui://college-helper/pdf-page-image-v2.html",
       mimeType: "text/html;profile=mcp-app",
     });
     const widgetContent = resource.contents[0];
-    expect(widgetContent && "text" in widgetContent ? widgetContent.text : "").toContain("toolResponseMetadata");
+    expect(widgetContent && "text" in widgetContent ? widgetContent.text : "").toContain("CollegeHelper PDF page viewer");
   });
 });

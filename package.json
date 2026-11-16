@@ -8,11 +8,12 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build:widget": "esbuild web/page-image-widget.ts --bundle --format=esm --minify --outfile=public/page-image-widget.js",
+    "build": "npm run build:widget && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run --dir test",
-    "check": "npm run typecheck && npm run lint && npm test",
+    "check": "npm run build:widget && npm run typecheck && npm run lint && npm test",
     "audit": "node --env-file-if-exists=.env --import tsx scripts/audit-canvas-api.ts",
     "audit:learning-browser": "node --env-file-if-exists=.env --import tsx scripts/audit-learning-resource-browser.ts",
     "audit:module-item-browser": "node --env-file-if-exists=.env --import tsx scripts/audit-module-item-browser.ts",
@@ -21,6 +22,7 @@
     "start": "node --env-file-if-exists=.env dist/src/index.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^2.0.4",
     "@modelcontextprotocol/node": "^2.1.2",
     "@modelcontextprotocol/server": "^2.4.0",
     "zod": "4.6.7"
@@ -29,6 +31,7 @@
     "@eslint/js": "10.0.1",
     "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "22.15.30",
+    "esbuild": "^0.28.2",
     "eslint": "10.14.0",
     "playwright": "^1.64.1",
     "tsx": "4.23.15",
