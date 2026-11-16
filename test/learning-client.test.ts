@@ -86,6 +86,33 @@ describe("LearningResourceClient", () => {
     );
   });
 
+  it("PDF 페이지 이미지를 요청하고 메타데이터를 검증한다", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      courseId: "999001",
+      resourceLocator: "module-item:456",
+      title: "주차별 PDF",
+      page: 3,
+      pageCount: 24,
+      dpi: 144,
+      mimeType: "image/png",
+      imageData: "aW1hZ2U=",
+      byteLength: 5,
+      cached: false,
+    }), { status: 200 }));
+    const client = new LearningResourceClient("http://worker:3200", 1_000, fetchImpl);
+
+    await expect(client.getPageImage("999001", "module-item:456", 3, 144)).resolves.toMatchObject({
+      page: 3,
+      pageCount: 24,
+      mimeType: "image/png",
+      cached: false,
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://worker:3200/courses/999001/resources/page-image?locator=module-item%3A456&page=3&dpi=144",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("예상하지 못한 응답 스키마를 거부한다", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ token: "secret" }), { status: 200 }));
     const client = new LearningResourceClient("http://worker:3200", 1_000, fetchImpl);

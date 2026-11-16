@@ -4,7 +4,7 @@ import { z } from "zod";
 import { CanvasError } from "../canvas/errors.js";
 import { seoulDayRange, todayInSeoul } from "../canvas/service.js";
 import type { CanvasService } from "../canvas/service.js";
-import type { LearningResourceClient } from "../learning/client.js";
+import type { LearningResourceClient, LearningResourcePageImage } from "../learning/client.js";
 
 const DateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD 형식이어야 합니다.");
 const IdSchema = z.string().regex(/^\d+$/, "Canvas ID는 숫자 문자열이어야 합니다.");
@@ -104,9 +104,39 @@ export function createCollegeHelperMcpServer(service: CanvasService, learningRes
     }, async ({ courseId, resourceId, resourceLocator, offset, maxChars }) => toolCall(
       () => learningResources.getText(courseId, resourceId, resourceLocator, offset, maxChars),
     ));
+
+    server.registerTool("get_learning_resource_page_image", {
+      title: "강의자료 페이지 이미지 보기",
+      description: "강의자료 PDF의 지정 페이지 한 장을 원본 레이아웃이 유지된 PNG 이미지로 렌더링합니다. 이미지는 메모리에 최대 10분만 캐시되며 원본 PDF와 임시 파일은 즉시 삭제됩니다.",
+      inputSchema: z.object({
+        courseId: IdSchema.describe("Canvas 과목 ID"),
+        resourceLocator: ResourceLocatorSchema.describe("학습자료 목록에서 반환된 식별자"),
+        page: z.number().int().min(1).describe("표시할 PDF 페이지 번호(1부터 시작)"),
+        dpi: z.union([z.literal(96), z.literal(144), z.literal(192)]).default(144).describe("이미지 해상도"),
+      }),
+      annotations: ReadOnlyAnnotations,
+    }, async ({ courseId, resourceLocator, page, dpi }) => imageToolCall(
+      () => learningResources.getPageImage(courseId, resourceLocator, page, dpi),
+    ));
   }
 
   return server;
+}
+
+async function imageToolCall(callback: () => Promise<LearningResourcePageImage>): Promise<CallToolResult> {
+  try {
+    const result = await callback();
+    const { imageData, ...metadata } = result;
+    return {
+      content: [
+        { type: "image", data: imageData, mimeType: result.mimeType },
+        { type: "text", text: `${result.title} PDF ${result.page}/${result.pageCount}페이지 (${result.dpi} DPI)` },
+      ],
+      structuredContent: metadata,
+    };
+  } catch (error) {
+    return { isError: true, content: [{ type: "text", text: safeErrorMessage(error) }] };
+  }
 }
 
 async function toolCall(callback: () => Promise<Record<string, unknown>>): Promise<CallToolResult> {

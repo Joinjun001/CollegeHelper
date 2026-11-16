@@ -77,6 +77,22 @@ interface CachedText {
   text: string;
   cachedAt: string;
 }
+interface PageImageResult {
+  courseId: string;
+  resourceLocator: string;
+  title: string;
+  page: number;
+  pageCount: number;
+  dpi: number;
+  mimeType: "image/png";
+  imageData: string;
+  byteLength: number;
+  cached: boolean;
+}
+
+const pageImageCache = new Map<string, { expiresAt: number; value: Omit<PageImageResult, "cached"> }>();
+const pageImageCacheTtlMs = 10 * 60_000;
+const pageImageCacheMaxEntries = 24;
 
 const config = loadConfig();
 const port = Number.parseInt(process.env["LEARNING_RESOURCE_WORKER_PORT"] ?? "3200", 10);
@@ -99,7 +115,7 @@ const server = createServer((request, response) => {
 });
 server.listen(port, "0.0.0.0", () => process.stderr.write(`Learning resource worker listening on port ${port}\n`));
 
-async function handleRequest(method: string, rawUrl: string, activeBrowser: Browser): Promise<Record<string, unknown>> {
+async function handleRequest(method: string, rawUrl: string, activeBrowser: Browser): Promise<object> {
   if (method !== "GET") throw new WorkerError(405);
   const url = new URL(rawUrl, "http://localhost");
   if (url.pathname === "/healthz") return { status: "ok" };
@@ -114,6 +130,15 @@ async function handleRequest(method: string, rawUrl: string, activeBrowser: Brow
         cached: await readCachedText(courseId, resource.resourceLocator) !== null,
       }))),
     };
+  }
+  const pageImageMatch = /^\/courses\/(\d+)\/resources\/page-image$/.exec(url.pathname);
+  if (pageImageMatch?.[1]) {
+    const courseId = IdSchema.parse(pageImageMatch[1]);
+    const locator = LocatorSchema.parse(url.searchParams.get("locator"));
+    const page = z.coerce.number().int().min(1).max(10_000).parse(url.searchParams.get("page"));
+    const dpi = z.coerce.number().refine((value) => [96, 144, 192].includes(value)).default(144)
+      .parse(url.searchParams.get("dpi") ?? undefined);
+    return await renderPageImage(activeBrowser, courseId, locator, page, dpi);
   }
   const legacyMatch = /^\/courses\/(\d+)\/resources\/(\d+)\/text$/.exec(url.pathname);
   const locatorMatch = /^\/courses\/(\d+)\/resources\/text$/.exec(url.pathname);
@@ -140,6 +165,59 @@ async function handleRequest(method: string, rawUrl: string, activeBrowser: Brow
     totalChars: cached.text.length,
     cachedAt: cached.cachedAt,
   };
+}
+
+async function renderPageImage(
+  activeBrowser: Browser,
+  courseId: string,
+  locator: string,
+  page: number,
+  dpi: number,
+): Promise<PageImageResult> {
+  const cacheKey = `${courseId}:${locator}:${page}:${dpi}`;
+  const cached = readCachedPageImage(cacheKey);
+  if (cached) return { ...cached, cached: true };
+  const session = await openResource(activeBrowser, courseId, locator);
+  const temporaryDir = await mkdtemp(join(tmpdir(), "college-helper-page-"));
+  try {
+    const pdfResponse = session.pdfResponse ?? await clickAndWaitForPdf(session);
+    const pdfUrl = new URL(pdfResponse.url());
+    if (!isAllowedPdf(pdfUrl)) throw new WorkerError(502);
+    const download = await session.context.request.get(pdfUrl.toString(), { failOnStatusCode: false, timeout: 60_000 });
+    const body = await download.body();
+    if (download.status() !== 200
+      || !(download.headers()["content-type"] ?? "").toLowerCase().startsWith("application/pdf")
+      || body.length === 0 || body.length > 75 * 1024 * 1024
+      || body.subarray(0, 5).toString("ascii") !== "%PDF-") throw new WorkerError(502);
+    const pdfPath = join(temporaryDir, "source.pdf");
+    const imagePrefix = join(temporaryDir, "page");
+    const imagePath = `${imagePrefix}.png`;
+    await writeFile(pdfPath, body, { mode: 0o600 });
+    const { stdout } = await execFileAsync("pdfinfo", [pdfPath], { timeout: 30_000, encoding: "utf8" });
+    const pageCount = Number.parseInt(/^Pages:\s+(\d+)$/m.exec(stdout)?.[1] ?? "", 10);
+    if (!Number.isSafeInteger(pageCount) || pageCount < 1 || page > pageCount) throw new WorkerError(422);
+    await execFileAsync("pdftocairo", [
+      "-png", "-singlefile", "-f", String(page), "-l", String(page), "-r", String(dpi), pdfPath, imagePrefix,
+    ], { timeout: 60_000 });
+    const image = await readFile(imagePath);
+    if (image.length === 0 || image.length > 8 * 1024 * 1024) throw new WorkerError(502);
+    const value: Omit<PageImageResult, "cached"> = {
+      courseId,
+      resourceLocator: locator,
+      title: session.resource.title,
+      page,
+      pageCount,
+      dpi,
+      mimeType: "image/png",
+      imageData: image.toString("base64"),
+      byteLength: image.length,
+    };
+    writeCachedPageImage(cacheKey, value);
+    return { ...value, cached: false };
+  } finally {
+    await session.context.close();
+    await rm(temporaryDir, { recursive: true, force: true });
+  }
 }
 
 async function loadResourceList(activeBrowser: Browser, courseId: string): Promise<ResourceItem[]> {
@@ -397,6 +475,22 @@ function cachePath(courseId: string, locator: string): string {
   const [kind, id] = LocatorSchema.parse(locator).split(":") as [string, string];
   return join(cacheDir, `course-${courseId}`, kind === "course-resource" ? `resource-${id}.json` : `module-item-${id}.json`);
 }
+function readCachedPageImage(cacheKey: string): Omit<PageImageResult, "cached"> | null {
+  const now = Date.now();
+  for (const [key, entry] of pageImageCache) {
+    if (entry.expiresAt <= now) pageImageCache.delete(key);
+  }
+  return pageImageCache.get(cacheKey)?.value ?? null;
+}
+function writeCachedPageImage(cacheKey: string, value: Omit<PageImageResult, "cached">): void {
+  pageImageCache.delete(cacheKey);
+  pageImageCache.set(cacheKey, { expiresAt: Date.now() + pageImageCacheTtlMs, value });
+  while (pageImageCache.size > pageImageCacheMaxEntries) {
+    const oldestKey = pageImageCache.keys().next().value;
+    if (!oldestKey) break;
+    pageImageCache.delete(oldestKey);
+  }
+}
 async function readCachedText(courseId: string, locator: string): Promise<CachedText | null> {
   try {
     const raw = JSON.parse(await readFile(cachePath(courseId, locator), "utf8")) as unknown;
@@ -434,7 +528,7 @@ async function mapConcurrent<T, R>(items: readonly T[], concurrency: number, map
   }));
   return results;
 }
-function sendJson(response: ServerResponse, status: number, value: Record<string, unknown>): void {
+function sendJson(response: ServerResponse, status: number, value: object): void {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   response.end(JSON.stringify(value));
 }

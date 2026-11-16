@@ -42,6 +42,7 @@
 | `get_assignment_context` | 과목 ID, 과제 ID | 과제 설명, 마감일과 제출 상태 |
 | `list_course_learning_resources` | 과목 ID | LTI 강의자료 목록과 캐시 상태 |
 | `get_learning_resource_text` | 과목 ID, 자료 ID, 오프셋 | PDF에서 추출한 텍스트 구간 |
+| `get_learning_resource_page_image` | 과목 ID, 자료 식별자, 페이지, DPI | 원본 레이아웃을 유지한 단일 페이지 PNG |
 
 모든 도구에는 `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`가 지정되어 있습니다. Canvas 설명, 공지와 강의자료 본문은 신뢰되지 않은 외부 콘텐츠로 취급합니다.
 
@@ -109,6 +110,8 @@ HY-ON의 강의자료실과 일부 주차별 학습자료는 Canvas 기본 Files
 6. MIME, 크기와 `%PDF-` 서명을 검증한 뒤 `pdftotext`로 텍스트를 추출합니다.
 7. 원본 PDF를 삭제하고 텍스트만 Docker 볼륨에 저장합니다.
 8. 다음 채팅과 컨테이너 재시작에서는 캐시된 텍스트를 반환합니다.
+
+페이지 이미지 요청은 `pdftocairo`로 지정한 한 페이지만 PNG로 렌더링합니다. 원본 PDF와 임시 PNG는 응답 후 삭제하며, 렌더링 결과는 워커 메모리에 최대 24장·10분 동안만 보관합니다. 영구 볼륨에는 페이지 이미지를 저장하지 않습니다.
 
 한 번에 반환하는 텍스트는 최대 20,000자이며 `offset`을 이용해 긴 문서를 이어서 읽습니다. 자세한 컴포넌트와 신뢰 경계는 [아키텍처 문서](./ARCHITECTURE.md)를 참고하세요.
 

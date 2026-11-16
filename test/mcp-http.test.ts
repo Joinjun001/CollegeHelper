@@ -93,4 +93,46 @@ describe("MCP server", () => {
     expect(result.structuredContent).toMatchObject({ resourceLocator: "module-item:456", moduleItemId: "456" });
     expect(learningFetch).toHaveBeenCalledTimes(1);
   });
+
+  it("PDF 페이지 이미지를 MCP 이미지 콘텐츠로 반환한다", async () => {
+    const canvasFetch = vi.fn<typeof fetch>();
+    const learningFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      courseId: "999001",
+      resourceLocator: "module-item:456",
+      title: "주차별 PDF",
+      page: 3,
+      pageCount: 24,
+      dpi: 144,
+      mimeType: "image/png",
+      imageData: "aW1hZ2U=",
+      byteLength: 5,
+      cached: false,
+    }), { status: 200 }));
+    const canvas = new CanvasClient({
+      baseUrl: "https://learning.example.edu",
+      accessToken: "test-token",
+      timeoutMs: 1_000,
+      fetchImpl: canvasFetch,
+    });
+    server = createCollegeHelperMcpServer(
+      new CanvasService(canvas, 2),
+      new LearningResourceClient("http://worker:3200", 1_000, learningFetch),
+    );
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    client = new Client({ name: "college-helper-test", version: "0.1.0" });
+    await client.connect(clientTransport);
+
+    const result = await client.callTool({
+      name: "get_learning_resource_page_image",
+      arguments: { courseId: "999001", resourceLocator: "module-item:456", page: 3, dpi: 144 },
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.content).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "image", data: "aW1hZ2U=", mimeType: "image/png" }),
+    ]));
+    expect(result.structuredContent).toMatchObject({ page: 3, pageCount: 24, cached: false });
+    expect(JSON.stringify(result.structuredContent)).not.toContain("aW1hZ2U=");
+  });
 });

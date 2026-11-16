@@ -35,6 +35,21 @@ const ResourceTextSchema = z.object({
   cachedAt: z.string().datetime({ offset: true }),
 });
 
+const PageImageSchema = z.object({
+  courseId: z.string().regex(/^\d+$/),
+  resourceLocator: z.string().regex(/^(course-resource|module-item):\d+$/),
+  title: z.string(),
+  page: z.number().int().positive(),
+  pageCount: z.number().int().positive(),
+  dpi: z.union([z.literal(96), z.literal(144), z.literal(192)]),
+  mimeType: z.literal("image/png"),
+  imageData: z.string().min(1),
+  byteLength: z.number().int().positive(),
+  cached: z.boolean(),
+});
+
+export type LearningResourcePageImage = z.infer<typeof PageImageSchema>;
+
 export class LearningResourceClient {
   constructor(
     private readonly baseUrl: string,
@@ -61,6 +76,13 @@ export class LearningResourceClient {
       `/courses/${encodeURIComponent(courseId)}/resources/text?${params.toString()}`,
     ));
     return { source: "HY-ON 학습자료 원본 PDF", untrustedContent: true, ...value };
+  }
+
+  async getPageImage(courseId: string, resourceLocator: string, page: number, dpi: 96 | 144 | 192): Promise<LearningResourcePageImage> {
+    const params = new URLSearchParams({ locator: resourceLocator, page: String(page), dpi: String(dpi) });
+    return PageImageSchema.parse(await this.get(
+      `/courses/${encodeURIComponent(courseId)}/resources/page-image?${params.toString()}`,
+    ));
   }
 
   private async get(path: string): Promise<unknown> {
